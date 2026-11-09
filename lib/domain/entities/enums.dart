@@ -3,6 +3,13 @@ enum UserRole {
   admin,
   employee;
 
+  /// Shop-wide money figures: the Reports tab (revenue, credit totals, stock
+  /// value, Excel export with customer phone numbers) and the dashboard's
+  /// Total Sales card, weekly revenue chart and recent transactions.
+  /// PRD §5 gives reports/exports to owners and admins only; employees still
+  /// see stock, low-stock alerts and credit accounts.
+  bool get canViewFinancials => this != UserRole.employee;
+
   static UserRole fromString(String val) {
     return UserRole.values.firstWhere(
       (e) => e.name.toLowerCase() == val.toLowerCase(),

@@ -10,6 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// Pure logic: login rules, barcodes, reports. No database or network.
 void main() {
   group('login / roles', () {
+    test('only owners and admins may see shop finances (reports, export, revenue)', () {
+      expect(UserRole.owner.canViewFinancials, isTrue);
+      expect(UserRole.admin.canViewFinancials, isTrue);
+      expect(UserRole.employee.canViewFinancials, isFalse);
+      // A missing/unknown role falls back to employee → no reports.
+      expect(UserRole.fromString('cashier').canViewFinancials, isFalse);
+    });
+
     test('Firebase error codes map to the right user message', () {
       expect(FirebaseAuthService.mapErrorCode('invalid-credential'), AuthFailure.invalidCredentials);
       expect(FirebaseAuthService.mapErrorCode('wrong-password'), AuthFailure.invalidCredentials);

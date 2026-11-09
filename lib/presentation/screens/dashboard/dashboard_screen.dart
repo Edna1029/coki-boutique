@@ -114,12 +114,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SyncRefreshMixin
                       const SizedBox(height: 24),
                     ],
 
-                    // Sales Chart & Analytics
-                    _buildWeeklySalesChart(isDark, l10n),
-                    const SizedBox(height: 24),
-
-                    // Best Selling Products & Recent Transactions
-                    _buildRecentTransactions(isDark, l10n),
+                    // Revenue chart + recent sales: owners/admins only.
+                    if (_canViewFinancials) ...[
+                      _buildWeeklySalesChart(isDark, l10n),
+                      const SizedBox(height: 24),
+                      _buildRecentTransactions(isDark, l10n),
+                    ],
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -247,16 +247,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SyncRefreshMixin
               subtitle: widget.isAmharic ? 'በክምችት ያሉ ዕቃዎች' : 'Units in stock',
               onTap: () => widget.onNavigateTab(1),
             ),
-            KpiCard(
-              title: l10n.totalSales,
-              value: CurrencyFormatter.format(totalSalesAmount,
-                  isAmharic: widget.isAmharic),
-              icon: Icons.point_of_sale,
-              iconColor: AppColors.primaryGreen,
-              subtitle:
-                  _countLabel(_sales.length, en: ('sale', 'sales'), am: 'ሽያጮች'),
-              onTap: () => widget.onNavigateTab(2),
-            ),
+            if (_canViewFinancials)
+              KpiCard(
+                title: l10n.totalSales,
+                value: CurrencyFormatter.format(totalSalesAmount,
+                    isAmharic: widget.isAmharic),
+                icon: Icons.point_of_sale,
+                iconColor: AppColors.primaryGreen,
+                subtitle: _countLabel(_sales.length,
+                    en: ('sale', 'sales'), am: 'ሽያጮች'),
+                onTap: () => widget.onNavigateTab(2),
+              ),
             KpiCard(
               title: l10n.creditBalance,
               value: CurrencyFormatter.format(outstandingCredit,
@@ -275,6 +276,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SyncRefreshMixin
       },
     );
   }
+
+  bool get _canViewFinancials => widget.currentUser.role.canViewFinancials;
 
   /// "1 sale" / "3 sales" in English; "3 ሽያጮች" in Amharic.
   String _countLabel(int n,
@@ -316,13 +319,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SyncRefreshMixin
                 color: AppColors.creditPending,
                 onTap: () => widget.onNavigateTab(3), // Credit
               ),
-              const SizedBox(width: 10),
-              _buildActionButton(
-                label: l10n.generateReport,
-                icon: Icons.bar_chart_outlined,
-                color: AppColors.info,
-                onTap: () => widget.onNavigateTab(4), // Reports
-              ),
+              if (_canViewFinancials) ...[
+                const SizedBox(width: 10),
+                _buildActionButton(
+                  label: l10n.generateReport,
+                  icon: Icons.bar_chart_outlined,
+                  color: AppColors.info,
+                  onTap: () => widget.onNavigateTab(4), // Reports
+                ),
+              ],
             ],
           ),
         ),

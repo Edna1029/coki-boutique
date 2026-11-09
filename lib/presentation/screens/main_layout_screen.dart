@@ -45,7 +45,21 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     super.dispose();
   }
 
+  static const int _reportsTab = 4;
+
+  bool get _canViewFinancials => widget.currentUser.role.canViewFinancials;
+
+  /// Tab indexes this user may open, in display order. Indexes stay fixed
+  /// (0 Dashboard … 5 Settings) so callers like the dashboard shortcuts
+  /// never need to know which tabs are hidden.
+  List<int> get _visibleTabs => [
+        0, 1, 2, 3,
+        if (_canViewFinancials) _reportsTab,
+        5,
+      ];
+
   void _onTabTapped(int index) {
+    if (!_visibleTabs.contains(index)) return;
     setState(() => _currentIndex = index);
   }
 
@@ -76,9 +90,8 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
         isAmharic: isAmharic,
         onGoToPos: () => _onTabTapped(2),
       ),
-      ReportsScreen(
-        isAmharic: isAmharic,
-      ),
+      // Never built for roles without report access.
+      _canViewFinancials ? ReportsScreen(isAmharic: isAmharic) : const SizedBox.shrink(),
       SettingsScreen(
         currentUser: widget.currentUser,
         onLanguageChanged: widget.onLanguageChanged,
@@ -111,8 +124,10 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                 boxShadow: isDark ? AppDimensions.darkCardShadow : AppDimensions.softShadow,
               ),
               child: BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: _onTabTapped,
+                // The bar only has the visible tabs, so map between its
+                // positions and the fixed tab indexes.
+                currentIndex: _visibleTabs.indexOf(_currentIndex),
+                onTap: (position) => _onTabTapped(_visibleTabs[position]),
                 selectedItemColor: AppColors.primaryGreen,
                 unselectedItemColor: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
                 selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
@@ -139,11 +154,12 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                     activeIcon: const Icon(Icons.account_balance_wallet),
                     label: l10n.navCredit,
                   ),
-                  BottomNavigationBarItem(
-                    icon: const Icon(Icons.bar_chart_outlined),
-                    activeIcon: const Icon(Icons.bar_chart),
-                    label: l10n.navReports,
-                  ),
+                  if (_canViewFinancials)
+                    BottomNavigationBarItem(
+                      icon: const Icon(Icons.bar_chart_outlined),
+                      activeIcon: const Icon(Icons.bar_chart),
+                      label: l10n.navReports,
+                    ),
                   BottomNavigationBarItem(
                     icon: const Icon(Icons.settings_outlined),
                     activeIcon: const Icon(Icons.settings),
@@ -213,7 +229,8 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                 _buildSidebarItem(1, Icons.inventory_2_outlined, Icons.inventory_2, l10n.navInventory),
                 _buildSidebarItem(2, Icons.point_of_sale_outlined, Icons.point_of_sale, l10n.navSales),
                 _buildSidebarItem(3, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, l10n.navCredit),
-                _buildSidebarItem(4, Icons.bar_chart_outlined, Icons.bar_chart, l10n.navReports),
+                if (_canViewFinancials)
+                  _buildSidebarItem(_reportsTab, Icons.bar_chart_outlined, Icons.bar_chart, l10n.navReports),
                 _buildSidebarItem(5, Icons.settings_outlined, Icons.settings, l10n.navSettings),
               ],
             ),
