@@ -92,9 +92,15 @@ class DatabaseTables {
       remaining_balance REAL NOT NULL,
       due_date TEXT NOT NULL,
       date_created TEXT NOT NULL,
-      status TEXT NOT NULL
+      status TEXT NOT NULL,
+      sale_id TEXT
     );
   ''';
+
+  /// v2: links a credit account to the POS sale that took the goods out of
+  /// stock. NULL for old free-text credit records.
+  static const String addCreditSaleIdColumn =
+      'ALTER TABLE $tableCreditSales ADD COLUMN sale_id TEXT';
 
   static const String createPaymentsTable = '''
     CREATE TABLE $tablePayments (

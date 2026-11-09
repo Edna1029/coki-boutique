@@ -53,7 +53,7 @@ class RemoteApply {
     ],
     DatabaseTables.tableCreditSales: [
       'credit_id', 'customer_name', 'phone_number', 'products_description', 'total_quantity', 'total_amount_owed',
-      'amount_paid', 'remaining_balance', 'due_date', 'date_created', 'status',
+      'amount_paid', 'remaining_balance', 'due_date', 'date_created', 'status', 'sale_id',
     ],
     DatabaseTables.tablePayments: [
       'payment_id', 'credit_id', 'payment_date', 'amount_paid', 'employee_id', 'employee_name', 'note',

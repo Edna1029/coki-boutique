@@ -15,6 +15,10 @@ class CreditSaleModel {
   final CreditStatus status;
   final List<PaymentModel> payments;
 
+  /// The POS sale this credit came from (stock was deducted there). Null for
+  /// old free-text credit records created before v2.
+  final String? saleId;
+
   CreditSaleModel({
     required this.creditId,
     required this.customerName,
@@ -28,6 +32,7 @@ class CreditSaleModel {
     required this.dateCreated,
     required this.status,
     this.payments = const [],
+    this.saleId,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,6 +48,7 @@ class CreditSaleModel {
       'due_date': dueDate,
       'date_created': dateCreated,
       'status': status.name,
+      'sale_id': saleId,
     };
   }
 
@@ -76,6 +82,7 @@ class CreditSaleModel {
       dateCreated: map['date_created'] ?? DateTime.now().toUtc().toIso8601String(),
       status: calcStatus,
       payments: payments,
+      saleId: map['sale_id'] as String?,
     );
   }
 
@@ -92,6 +99,7 @@ class CreditSaleModel {
     String? dateCreated,
     CreditStatus? status,
     List<PaymentModel>? payments,
+    String? saleId,
   }) {
     return CreditSaleModel(
       creditId: creditId ?? this.creditId,
@@ -106,6 +114,7 @@ class CreditSaleModel {
       dateCreated: dateCreated ?? this.dateCreated,
       status: status ?? this.status,
       payments: payments ?? this.payments,
+      saleId: saleId ?? this.saleId,
     );
   }
 }

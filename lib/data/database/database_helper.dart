@@ -30,10 +30,23 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: databaseVersion,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
       onConfigure: _onConfigure,
     );
+  }
+
+  /// Bump this and add a step to [_upgradeDB] for every schema change.
+  /// 1 = original schema; 2 = credit_sales.sale_id.
+  static const int databaseVersion = 2;
+
+  /// Brings an existing install's database up to [databaseVersion] without
+  /// losing data. Fresh installs go through [_createDB] instead.
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(DatabaseTables.addCreditSaleIdColumn);
+    }
   }
 
   Future<void> _onConfigure(Database db) async {

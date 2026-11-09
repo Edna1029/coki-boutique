@@ -14,10 +14,15 @@ class CreditSalesScreen extends StatefulWidget {
   final UserModel currentUser;
   final bool isAmharic;
 
+  /// Switches to the POS tab. New credit sales are made there (cart → "Credit")
+  /// so the goods are taken out of stock like any other sale.
+  final VoidCallback? onGoToPos;
+
   const CreditSalesScreen({
     super.key,
     required this.currentUser,
     required this.isAmharic,
+    this.onGoToPos,
   });
 
   @override
@@ -245,119 +250,16 @@ class _CreditSalesScreenState extends State<CreditSalesScreen> with SyncRefreshM
     );
   }
 
-  void _showNewCreditDialog() {
-    final nameCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    final owedCtrl = TextEditingController();
-    final depositCtrl = TextEditingController(text: '0');
-    String? errorText;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) {
-        final l10n = AppLocalizations.of(context);
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusDialog)),
-          title: Text(
-            l10n.newCreditSale,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (errorText != null) _errorBanner(errorText!),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(labelText: l10n.customerName),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(labelText: l10n.customerPhone),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: descCtrl,
-                  decoration: InputDecoration(
-                    labelText: widget.isAmharic ? 'የተወሰዱ ዕቃዎች መግለጫ' : 'Purchased Items Description',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: owedCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: widget.isAmharic ? 'ጠቅላላ ዕዳ (ETB)' : 'Total Owed (ETB)',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: depositCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: widget.isAmharic ? 'ቅድመ ክፍያ' : 'Down Payment',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(l10n.cancel),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                final phone = phoneCtrl.text.trim();
-                final owed = _parseAmount(owedCtrl.text) ?? 0.0;
-                final deposit = _parseAmount(depositCtrl.text) ?? 0.0;
-
-                if (name.isEmpty) {
-                  setDialogState(() => errorText = widget.isAmharic
-                      ? 'እባክዎ የደንበኛውን ስም ያስገቡ።'
-                      : 'Please enter the customer name.');
-                  return;
-                }
-
-                try {
-                  // Service rejects owed ≤ 0, negative deposit, deposit > owed.
-                  await _sqliteService.createCreditSale(
-                    customerName: name,
-                    phoneNumber: phone.isNotEmpty ? phone : '+251 9...',
-                    productsDescription: descCtrl.text.isNotEmpty ? descCtrl.text : 'Boutique Apparel',
-                    totalQuantity: 1,
-                    totalAmountOwed: owed,
-                    initialDeposit: deposit,
-                    dueDate: DateTime.now().add(const Duration(days: 30)).toUtc().toIso8601String(),
-                    employeeId: widget.currentUser.userId,
-                    employeeName: widget.currentUser.fullName,
-                  );
-                } on InvalidPaymentException catch (e) {
-                  setDialogState(() => errorText = _paymentErrorMessage(e));
-                  return;
-                }
-
-                if (!ctx.mounted) return;
-                Navigator.of(ctx).pop();
-                _loadCreditAccounts();
-              },
-              child: Text(l10n.save),
-            ),
-          ],
-        );
-      }),
+  /// New credit sales go through the POS so the goods leave stock.
+  void _startNewCreditSale() {
+    widget.onGoToPos?.call();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        content: Text(widget.isAmharic
+            ? 'ዕቃዎቹን ወደ ጋሪ ይጨምሩ፣ ከዚያ "ብድር"ን ይምረጡ።'
+            : 'Add the items to the cart, then choose "Credit" as the payment.'),
+      ),
     );
   }
 
@@ -376,8 +278,8 @@ class _CreditSalesScreenState extends State<CreditSalesScreen> with SyncRefreshM
         actions: [
           IconButton(
             tooltip: l10n.newCreditSale,
-            icon: const Icon(Icons.person_add_alt_1, color: AppColors.primaryGreen, size: 26),
-            onPressed: _showNewCreditDialog,
+            icon: const Icon(Icons.add_shopping_cart, color: AppColors.primaryGreen, size: 26),
+            onPressed: _startNewCreditSale,
           ),
         ],
       ),

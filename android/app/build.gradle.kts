@@ -1,3 +1,24 @@
+import java.io.FileInputStream
+import java.util.Properties
+
+// Release signing key. android/key.properties is NOT in git (see .gitignore):
+// it holds the keystore path and passwords on the build PC only.
+//   storeFile=C:/Users/<you>/coki-keys/coki-release.jks
+//   storePassword=...
+//   keyAlias=coki
+//   keyPassword=...
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) load(FileInputStream(keystorePropertiesFile))
+}
+val wantsRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+if (wantsRelease && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "Release build needs android/key.properties (release signing key). " +
+            "Refusing to sign a release with the debug key."
+    )
+}
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
@@ -30,11 +51,23 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Own release key (never the debug key) — see key.properties above.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

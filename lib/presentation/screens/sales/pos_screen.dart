@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../../widgets/sync_refresh_mixin.dart';
 import '../../widgets/barcode_scanner_screen.dart';
+import '../../widgets/phone_number_field.dart';
 import '../../widgets/product_image.dart';
+import '../../../core/utils/phone_number.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/date_formatter.dart';
 import '../../../data/models/product_model.dart';
 import '../../../data/models/sale_model.dart';
 import '../../../data/models/user_model.dart';
@@ -53,7 +56,7 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
 
   List<ProductModel> _products = [];
   final List<CartEntry> _cart = [];
-  String _paymentMethod = 'cash'; // 'cash', 'mobile_transfer'
+  String _paymentMethod = 'cash'; // 'cash', 'mobile_transfer', 'credit'
   final _customerNameCtrl = TextEditingController();
   final _customerPhoneCtrl = TextEditingController();
 
@@ -179,17 +182,31 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
       (p) => p.productId == found.productId,
       orElse: () => found,
     );
+    if (product.totalStock <= 0) {
+      _showSoldOutMessage(product);
+      return;
+    }
     _showSizePickerSheet(product);
+  }
+
+  void _showSoldOutMessage(ProductModel product) {
+    _messenger.hideCurrentSnackBar();
+    _messenger.showSnackBar(
+      SnackBar(
+        content: Text(widget.isAmharic
+            ? '${product.productName} ተሽጦ አልቋል'
+            : '${product.productName} is sold out'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   double get _subtotal => _cart.fold(0.0, (sum, c) => sum + c.total);
   double get _tax => _subtotal * 0.15;
   double get _total => _subtotal + _tax;
 
-  Future<void> _completeSale() async {
-    if (_cart.isEmpty) return;
-
-    final saleItems = _cart.map((entry) {
+  List<SaleItemModel> _cartAsSaleItems() {
+    return _cart.map((entry) {
       return SaleItemModel(
         saleItemId: const Uuid().v4(),
         saleId: '',
@@ -201,10 +218,34 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
         totalAmount: entry.total,
       );
     }).toList();
+  }
+
+  /// After a successful sale: close the phone cart sheet (so the old cart
+  /// isn't left behind the dialog), empty the cart and reload stock.
+  void _resetAfterSale() {
+    final sheetCtx = _sheetContext;
+    if (sheetCtx != null && sheetCtx.mounted) {
+      Navigator.of(sheetCtx).pop();
+    }
+    _updateCart(() {
+      _cart.clear();
+      _customerNameCtrl.clear();
+      _customerPhoneCtrl.clear();
+      _paymentMethod = 'cash';
+    });
+    _loadProducts();
+  }
+
+  Future<void> _completeSale() async {
+    if (_cart.isEmpty) return;
+    if (_paymentMethod == 'credit') {
+      _showCreditDetailsDialog();
+      return;
+    }
 
     try {
       final sale = await _sqliteService.processSale(
-        items: saleItems,
+        items: _cartAsSaleItems(),
         subtotal: _subtotal,
         taxAmount: _tax,
         totalAmount: _total,
@@ -215,20 +256,7 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
         paymentMethod: _paymentMethod,
       );
 
-      // Close the phone cart sheet first so the old cart isn't left showing
-      // behind the "Sale completed" dialog.
-      final sheetCtx = _sheetContext;
-      if (sheetCtx != null && sheetCtx.mounted) {
-        Navigator.of(sheetCtx).pop();
-      }
-
-      _updateCart(() {
-        _cart.clear();
-        _customerNameCtrl.clear();
-        _customerPhoneCtrl.clear();
-      });
-
-      _loadProducts();
+      _resetAfterSale();
       _showSaleCompleteDialog(sale);
     } on InsufficientStockException catch (e) {
       // Stock changed since the cart was filled. Nothing was saved; refresh the
@@ -248,7 +276,187 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
     }
   }
 
-  void _showSaleCompleteDialog(SaleModel sale) {
+  /// Credit checkout: who is taking the goods, any down payment, and when the
+  /// rest is due. The goods leave stock now; the balance is tracked on the
+  /// Credit screen.
+  void _showCreditDetailsDialog() {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final depositCtrl = TextEditingController();
+    var dueDate = DateTime.now().add(const Duration(days: 30));
+    var country = PhoneNumbers.ethiopia;
+    String? phoneError;
+    String? errorText;
+    var saving = false;
+    final am = widget.isAmharic;
+    final total = _total;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(builder: (dialogCtx, setDialogState) {
+        final l10n = AppLocalizations.of(context);
+
+        Future<void> save() async {
+          final name = nameCtrl.text.trim();
+          final digits = phoneCtrl.text.trim();
+          final deposit = double.tryParse(depositCtrl.text.replaceAll(',', '').trim()) ?? 0.0;
+          if (name.isEmpty) {
+            setDialogState(() => errorText = am ? 'እባክዎ የደንበኛውን ስም ያስገቡ።' : 'Please enter the customer\'s name.');
+            return;
+          }
+          final badPhone = PhoneNumberField.validate(country, digits, isAmharic: am);
+          if (badPhone != null) {
+            setDialogState(() {
+              phoneError = badPhone;
+              errorText = null;
+            });
+            return;
+          }
+          final phone = PhoneNumbers.toE164(country, digits);
+          setDialogState(() {
+            saving = true;
+            errorText = null;
+            phoneError = null;
+          });
+          try {
+            final result = await _sqliteService.processCreditSale(
+              items: _cartAsSaleItems(),
+              subtotal: _subtotal,
+              taxAmount: _tax,
+              totalAmount: total,
+              employeeId: widget.currentUser.userId,
+              employeeName: widget.currentUser.fullName,
+              customerName: name,
+              customerPhone: phone,
+              initialDeposit: deposit,
+              dueDate: DateTime(dueDate.year, dueDate.month, dueDate.day, 23, 59).toUtc().toIso8601String(),
+            );
+            if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+            _resetAfterSale();
+            _showSaleCompleteDialog(result.sale, owed: result.credit.remainingBalance, customer: name);
+          } on InvalidPaymentException catch (e) {
+            final max = CurrencyFormatter.format(e.maxAllowed, isAmharic: am);
+            setDialogState(() {
+              saving = false;
+              errorText = e.reason == PaymentRejection.depositExceedsTotal
+                  ? (am ? 'ቅድመ ክፍያው ከጠቅላላው በላይ ሊሆን አይችልም። ከፍተኛው: $max' : 'Down payment cannot be more than the total. Maximum: $max')
+                  : (am ? 'ቅድመ ክፍያው ትክክል አይደለም።' : 'The down payment is not valid.');
+            });
+          } on InsufficientStockException catch (e) {
+            // Stock changed meanwhile: nothing was saved. Back to the cart.
+            if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+            _loadProducts();
+            if (mounted) _showStockLimitMessage(e.productName, e.size, e.available);
+          } catch (e) {
+            setDialogState(() {
+              saving = false;
+              errorText = am ? 'ስህተት: $e' : 'Error: $e';
+            });
+          }
+        }
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusDialog)),
+          title: Text(l10n.newCreditSale, style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (errorText != null)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.error),
+                    ),
+                    child: Text(errorText!, style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                  ),
+                Text(
+                  '${am ? "ጠቅላላ:" : "Total:"} ${CurrencyFormatter.format(total, isAmharic: am)}'
+                  '  ·  ${am ? "$_cartUnits ዕቃዎች" : "$_cartUnits ${_cartUnits == 1 ? 'item' : 'items'}"}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryGreen),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(labelText: l10n.customerName, prefixIcon: const Icon(Icons.person_outline)),
+                ),
+                const SizedBox(height: 10),
+                PhoneNumberField(
+                  controller: phoneCtrl,
+                  country: country,
+                  isAmharic: am,
+                  enabled: !saving,
+                  labelText: '${l10n.customerPhone} *',
+                  errorText: phoneError,
+                  onCountryChanged: (c) => setDialogState(() {
+                    country = c;
+                    phoneError = null;
+                  }),
+                  onChanged: (_) {
+                    if (phoneError != null) setDialogState(() => phoneError = null);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: depositCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: am ? 'ቅድመ ክፍያ (ካለ)' : 'Down payment (optional)',
+                    hintText: '0',
+                    floatingLabelBehavior: FloatingLabelBehavior.always,
+                    prefixIcon: const Icon(Icons.payments_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: saving
+                      ? null
+                      : () async {
+                          final today = DateTime.now();
+                          final picked = await showDatePicker(
+                            context: dialogCtx,
+                            initialDate: dueDate,
+                            firstDate: DateTime(today.year, today.month, today.day),
+                            lastDate: today.add(const Duration(days: 365)),
+                          );
+                          if (picked != null) setDialogState(() => dueDate = picked);
+                        },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: l10n.dueDate,
+                      prefixIcon: const Icon(Icons.event_outlined),
+                    ),
+                    child: Text(DateFormatter.formatDate(dueDate, isAmharic: am)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.of(dialogCtx).pop(),
+              child: Text(l10n.cancel),
+            ),
+            ElevatedButton(
+              onPressed: saving ? null : save,
+              child: Text(am ? 'የብድር ሽያጭ መዝግብ' : 'Record credit sale'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  /// [owed] / [customer] are set for a credit sale: the dialog then shows
+  /// what the customer still owes instead of "Total Paid".
+  void _showSaleCompleteDialog(SaleModel sale, {double? owed, String? customer}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -270,19 +478,33 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
               ),
               const SizedBox(height: 16),
               Text(
-                widget.isAmharic ? 'ሽያጩ በተሳካ ሁኔታ ተጠናቋል!' : 'Sale Completed Successfully!',
+                owed == null
+                    ? (widget.isAmharic ? 'ሽያጩ በተሳካ ሁኔታ ተጠናቋል!' : 'Sale Completed Successfully!')
+                    : (widget.isAmharic ? 'የብድር ሽያጭ ተመዝግቧል!' : 'Credit Sale Recorded!'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 8),
               Text(
-                '${widget.isAmharic ? "ጠቅላላ:" : "Total Paid:"} ${CurrencyFormatter.format(sale.totalAmount, isAmharic: widget.isAmharic)}',
+                owed == null
+                    ? '${widget.isAmharic ? "ጠቅላላ:" : "Total Paid:"} ${CurrencyFormatter.format(sale.totalAmount, isAmharic: widget.isAmharic)}'
+                    : '${widget.isAmharic ? "ጠቅላላ:" : "Total:"} ${CurrencyFormatter.format(sale.totalAmount, isAmharic: widget.isAmharic)}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primaryGreen,
                 ),
               ),
+              if (owed != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  widget.isAmharic
+                      ? '$customer ቀሪ ዕዳ: ${CurrencyFormatter.format(owed, isAmharic: true)}'
+                      : '$customer owes: ${CurrencyFormatter.format(owed)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.error),
+                ),
+              ],
               const SizedBox(height: 16),
               Text(
                 '${widget.isAmharic ? "የደረሰኝ ቁጥር:" : "Receipt ID:"} ${sale.saleId.substring(0, 8).toUpperCase()}',
@@ -320,7 +542,9 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
       return p.productName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.sku.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           p.barcode.contains(_searchQuery);
-    }).toList();
+    }).toList()
+      // Sellable products first; sold-out ones stay visible (greyed) at the end.
+      ..sort((a, b) => (a.totalStock > 0 ? 0 : 1).compareTo(b.totalStock > 0 ? 0 : 1));
 
     return Scaffold(
       appBar: AppBar(
@@ -464,7 +688,11 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
   }
 
   Widget _buildPosProductCard(ProductModel prod, bool isDark) {
-    return Container(
+    final soldOut = prod.totalStock <= 0;
+    return Opacity(
+      // Sold out: greyed, red "Sold out" badge, disabled + button.
+      opacity: soldOut ? 0.55 : 1,
+      child: Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusCard),
@@ -487,11 +715,13 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: soldOut ? AppColors.error : Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      widget.isAmharic ? '${prod.totalStock} በክምችት' : '${prod.totalStock} in stock',
+                      soldOut
+                          ? (widget.isAmharic ? 'ተሽጦ አልቋል' : 'Sold out')
+                          : (widget.isAmharic ? '${prod.totalStock} በክምችት' : '${prod.totalStock} in stock'),
                       style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -525,14 +755,14 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
                         ),
                       ),
                       InkWell(
-                        onTap: () => _showSizePickerSheet(prod),
+                        onTap: soldOut ? () => _showSoldOutMessage(prod) : () => _showSizePickerSheet(prod),
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: AppColors.primaryGreen,
+                            color: soldOut ? Colors.grey : AppColors.primaryGreen,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 14),
+                          child: Icon(soldOut ? Icons.block : Icons.add, color: Colors.white, size: 14),
                         ),
                       ),
                     ],
@@ -542,6 +772,7 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -759,11 +990,19 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
                   value: 'cash',
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Expanded(
+                flex: 2,
                 child: _buildPaymentChip(
                   label: 'CBE / Telebirr',
                   value: 'mobile_transfer',
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _buildPaymentChip(
+                  label: widget.isAmharic ? 'ብድር' : 'Credit',
+                  value: 'credit',
                 ),
               ),
             ],

@@ -9,6 +9,7 @@ import '../models/sale_model.dart';
 import '../models/credit_sale_model.dart';
 import '../models/payment_model.dart';
 import '../models/sync_queue_item.dart';
+import '../../core/utils/phone_number.dart';
 import '../../domain/entities/enums.dart';
 
 /// Thrown by [SQLiteService.processSale] when a line asks for more units than
@@ -464,116 +465,197 @@ class SQLiteService {
     String paymentMethod = 'cash',
   }) async {
     final db = await _db;
-    final now = DateTime.now().toUtc().toIso8601String();
-    final saleId = _uuid.v4();
+    return await db.transaction<SaleModel>((txn) => _recordSaleTxn(
+          txn,
+          items: items,
+          subtotal: subtotal,
+          taxAmount: taxAmount,
+          totalAmount: totalAmount,
+          employeeId: employeeId,
+          employeeName: employeeName,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          paymentMethod: paymentMethod,
+        ));
+  }
 
-    return await db.transaction<SaleModel>((txn) async {
-      // 1. Validate stock for every line BEFORE writing anything. Quantities
-      //    for the same product+size are summed in case they appear twice.
-      //    Throwing here rolls back the whole transaction: no partial sale.
-      final required = <String, int>{};
-      final labels = <String, SaleItemModel>{};
-      for (final item in items) {
-        if (item.quantity <= 0) {
-          throw ArgumentError('Quantity must be positive for ${item.productName}');
-        }
-        final key = '${item.productId}|${item.size.toUpperCase()}';
-        required[key] = (required[key] ?? 0) + item.quantity;
-        labels[key] = item;
-      }
-      final variantIds = <String, String>{};
-      for (final entry in required.entries) {
-        final item = labels[entry.key]!;
-        final variant = await txn.query(
-          DatabaseTables.tableProductVariants,
-          where: 'product_id = ? AND UPPER(size) = ?',
-          whereArgs: [item.productId, item.size.toUpperCase()],
-        );
-        final available = variant.isEmpty ? 0 : variant.first['quantity'] as int;
-        if (available < entry.value) {
-          throw InsufficientStockException(
-            productName: item.productName,
-            size: item.size,
-            requested: entry.value,
-            available: available,
-          );
-        }
-        variantIds[entry.key] = variant.first['variant_id'] as String;
-      }
-
-      // 2. Record the sale.
-      final saleMap = {
-        'sale_id': saleId,
-        'subtotal': subtotal,
-        'tax_amount': taxAmount,
-        'total_amount': totalAmount,
-        'employee_id': employeeId,
-        'employee_name': employeeName,
-        'customer_name': customerName,
-        'customer_phone': customerPhone,
-        'date': now,
-        'payment_method': paymentMethod,
-      };
-
-      await txn.insert(DatabaseTables.tableSales, saleMap);
-
-      final List<SaleItemModel> savedItems = [];
-      final itemMaps = <Map<String, Object?>>[];
-      final stockChanges = <String, int>{}; // variantId → units sold
-      for (final item in items) {
-        final itemId = _uuid.v4();
-        final itemMap = {
-          'sale_item_id': itemId,
-          'sale_id': saleId,
-          'product_id': item.productId,
-          'product_name': item.productName,
-          'size': item.size,
-          'quantity': item.quantity,
-          'unit_price': item.unitPrice,
-          'total_amount': item.totalAmount,
-        };
-        await txn.insert(DatabaseTables.tableSaleItems, itemMap);
-        savedItems.add(SaleItemModel.fromMap(itemMap));
-        itemMaps.add(itemMap);
-
-        // 3. Deduct stock. Already validated above, and the update itself is
-        //    relative (quantity - n) so it can never go below what was checked.
-        final variantId = variantIds['${item.productId}|${item.size.toUpperCase()}']!;
-        await txn.rawUpdate(
-          'UPDATE ${DatabaseTables.tableProductVariants} '
-          'SET quantity = quantity - ?, last_updated = ? WHERE variant_id = ?',
-          [item.quantity, now, variantId],
-        );
-        stockChanges[variantId] = (stockChanges[variantId] ?? 0) + item.quantity;
-      }
-
-      // Sync: the sale (with its line items embedded) is an add-only record;
-      // stock is uploaded as CHANGES (−n) so sales on several devices all count.
-      await _enqueueSync(
+  /// A POS sale paid on credit: the goods leave stock exactly like a normal
+  /// sale (same stock check, same sync) AND a credit account is opened for the
+  /// customer, linked by `sale_id`. One transaction — if either part fails
+  /// (not enough stock, bad down payment) nothing at all is saved.
+  Future<({SaleModel sale, CreditSaleModel credit})> processCreditSale({
+    required List<SaleItemModel> items,
+    required double subtotal,
+    required double taxAmount,
+    required double totalAmount,
+    required String employeeId,
+    required String employeeName,
+    required String customerName,
+    required String customerPhone,
+    required double initialDeposit,
+    required String dueDate,
+  }) async {
+    _validateNewCredit(totalAmount, initialDeposit);
+    if (customerName.trim().isEmpty) {
+      throw ArgumentError('Customer name is required for a credit sale');
+    }
+    if (!PhoneNumbers.isE164(customerPhone.trim())) {
+      throw ArgumentError('A valid phone number (e.g. +251912345678) is required for a credit sale');
+    }
+    final db = await _db;
+    return await db.transaction((txn) async {
+      final sale = await _recordSaleTxn(
         txn,
-        DatabaseTables.tableSales,
-        saleId,
-        SyncOperation.insert,
-        {...saleMap, 'items': itemMaps},
-      );
-      for (final e in stockChanges.entries) {
-        await _enqueueIncrement(txn, DatabaseTables.tableProductVariants, e.key, 'quantity', -e.value, now);
-      }
-
-      return SaleModel(
-        saleId: saleId,
-        items: savedItems,
+        items: items,
         subtotal: subtotal,
         taxAmount: taxAmount,
         totalAmount: totalAmount,
         employeeId: employeeId,
         employeeName: employeeName,
-        customerName: customerName,
-        customerPhone: customerPhone,
-        date: now,
-        paymentMethod: paymentMethod,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        paymentMethod: 'credit',
       );
+      final credit = await _recordCreditTxn(
+        txn,
+        customerName: customerName.trim(),
+        phoneNumber: customerPhone.trim(),
+        productsDescription: describeItems(items),
+        totalQuantity: items.fold(0, (sum, i) => sum + i.quantity),
+        totalAmountOwed: totalAmount,
+        initialDeposit: initialDeposit,
+        dueDate: dueDate,
+        employeeId: employeeId,
+        employeeName: employeeName,
+        saleId: sale.saleId,
+      );
+      return (sale: sale, credit: credit);
     });
+  }
+
+  /// "Habesha Kemis (M) ×1, Silk Scarf (S) ×2" — shown on the credit card.
+  static String describeItems(List<SaleItemModel> items) =>
+      items.map((i) => '${i.productName} (${i.size}) ×${i.quantity}').join(', ');
+
+  Future<SaleModel> _recordSaleTxn(
+    Transaction txn, {
+    required List<SaleItemModel> items,
+    required double subtotal,
+    required double taxAmount,
+    required double totalAmount,
+    required String employeeId,
+    required String employeeName,
+    String? customerName,
+    String? customerPhone,
+    required String paymentMethod,
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final saleId = _uuid.v4();
+    // 1. Validate stock for every line BEFORE writing anything. Quantities
+    //    for the same product+size are summed in case they appear twice.
+    //    Throwing here rolls back the whole transaction: no partial sale.
+    final required = <String, int>{};
+    final labels = <String, SaleItemModel>{};
+    for (final item in items) {
+      if (item.quantity <= 0) {
+        throw ArgumentError('Quantity must be positive for ${item.productName}');
+      }
+      final key = '${item.productId}|${item.size.toUpperCase()}';
+      required[key] = (required[key] ?? 0) + item.quantity;
+      labels[key] = item;
+    }
+    final variantIds = <String, String>{};
+    for (final entry in required.entries) {
+      final item = labels[entry.key]!;
+      final variant = await txn.query(
+        DatabaseTables.tableProductVariants,
+        where: 'product_id = ? AND UPPER(size) = ?',
+        whereArgs: [item.productId, item.size.toUpperCase()],
+      );
+      final available = variant.isEmpty ? 0 : variant.first['quantity'] as int;
+      if (available < entry.value) {
+        throw InsufficientStockException(
+          productName: item.productName,
+          size: item.size,
+          requested: entry.value,
+          available: available,
+        );
+      }
+      variantIds[entry.key] = variant.first['variant_id'] as String;
+    }
+
+    // 2. Record the sale.
+    final saleMap = {
+      'sale_id': saleId,
+      'subtotal': subtotal,
+      'tax_amount': taxAmount,
+      'total_amount': totalAmount,
+      'employee_id': employeeId,
+      'employee_name': employeeName,
+      'customer_name': customerName,
+      'customer_phone': customerPhone,
+      'date': now,
+      'payment_method': paymentMethod,
+    };
+
+    await txn.insert(DatabaseTables.tableSales, saleMap);
+
+    final List<SaleItemModel> savedItems = [];
+    final itemMaps = <Map<String, Object?>>[];
+    final stockChanges = <String, int>{}; // variantId → units sold
+    for (final item in items) {
+      final itemId = _uuid.v4();
+      final itemMap = {
+        'sale_item_id': itemId,
+        'sale_id': saleId,
+        'product_id': item.productId,
+        'product_name': item.productName,
+        'size': item.size,
+        'quantity': item.quantity,
+        'unit_price': item.unitPrice,
+        'total_amount': item.totalAmount,
+      };
+      await txn.insert(DatabaseTables.tableSaleItems, itemMap);
+      savedItems.add(SaleItemModel.fromMap(itemMap));
+      itemMaps.add(itemMap);
+
+      // 3. Deduct stock. Already validated above, and the update itself is
+      //    relative (quantity - n) so it can never go below what was checked.
+      final variantId = variantIds['${item.productId}|${item.size.toUpperCase()}']!;
+      await txn.rawUpdate(
+        'UPDATE ${DatabaseTables.tableProductVariants} '
+        'SET quantity = quantity - ?, last_updated = ? WHERE variant_id = ?',
+        [item.quantity, now, variantId],
+      );
+      stockChanges[variantId] = (stockChanges[variantId] ?? 0) + item.quantity;
+    }
+
+    // Sync: the sale (with its line items embedded) is an add-only record;
+    // stock is uploaded as CHANGES (−n) so sales on several devices all count.
+    await _enqueueSync(
+      txn,
+      DatabaseTables.tableSales,
+      saleId,
+      SyncOperation.insert,
+      {...saleMap, 'items': itemMaps},
+    );
+    for (final e in stockChanges.entries) {
+      await _enqueueIncrement(txn, DatabaseTables.tableProductVariants, e.key, 'quantity', -e.value, now);
+    }
+
+    return SaleModel(
+      saleId: saleId,
+      items: savedItems,
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      totalAmount: totalAmount,
+      employeeId: employeeId,
+      employeeName: employeeName,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      date: now,
+      paymentMethod: paymentMethod,
+    );
   }
 
   Future<List<SaleModel>> getAllSales() async {
@@ -625,6 +707,24 @@ class SQLiteService {
     required String employeeId,
     required String employeeName,
   }) async {
+    _validateNewCredit(totalAmountOwed, initialDeposit);
+    final db = await _db;
+    return await db.transaction<CreditSaleModel>((txn) => _recordCreditTxn(
+          txn,
+          customerName: customerName,
+          phoneNumber: phoneNumber,
+          productsDescription: productsDescription,
+          totalQuantity: totalQuantity,
+          totalAmountOwed: totalAmountOwed,
+          initialDeposit: initialDeposit,
+          dueDate: dueDate,
+          employeeId: employeeId,
+          employeeName: employeeName,
+        ));
+  }
+
+  /// Rejects owed ≤ 0, a negative down payment, or one larger than the total.
+  void _validateNewCredit(double totalAmountOwed, double initialDeposit) {
     if (totalAmountOwed <= 0) {
       throw const InvalidPaymentException(PaymentRejection.notPositive);
     }
@@ -634,62 +734,73 @@ class SQLiteService {
     if (initialDeposit > totalAmountOwed + _moneyEpsilon) {
       throw InvalidPaymentException(PaymentRejection.depositExceedsTotal, maxAllowed: totalAmountOwed);
     }
+  }
 
-    final db = await _db;
+  Future<CreditSaleModel> _recordCreditTxn(
+    Transaction txn, {
+    required String customerName,
+    required String phoneNumber,
+    required String productsDescription,
+    required int totalQuantity,
+    required double totalAmountOwed,
+    required double initialDeposit,
+    required String dueDate,
+    required String employeeId,
+    required String employeeName,
+    String? saleId,
+  }) async {
     final now = DateTime.now().toUtc().toIso8601String();
     final creditId = _uuid.v4();
+    final remaining = (totalAmountOwed - initialDeposit).clamp(0.0, totalAmountOwed);
+    final status = remaining <= 0
+        ? CreditStatus.fullyPaid
+        : (initialDeposit > 0 ? CreditStatus.partiallyPaid : CreditStatus.pending);
 
-    return await db.transaction<CreditSaleModel>((txn) async {
-      final remaining = (totalAmountOwed - initialDeposit).clamp(0.0, totalAmountOwed);
-      final status = remaining <= 0
-          ? CreditStatus.fullyPaid
-          : (initialDeposit > 0 ? CreditStatus.partiallyPaid : CreditStatus.pending);
+    final creditMap = {
+      'credit_id': creditId,
+      'customer_name': customerName,
+      'phone_number': phoneNumber,
+      'products_description': productsDescription,
+      'total_quantity': totalQuantity,
+      'total_amount_owed': totalAmountOwed,
+      'amount_paid': initialDeposit,
+      'remaining_balance': remaining,
+      'due_date': dueDate,
+      'date_created': now,
+      'status': status.name,
+      'sale_id': saleId,
+    };
 
-      final creditMap = {
+    await txn.insert(DatabaseTables.tableCreditSales, creditMap);
+
+    // Credit record first (it already includes the deposit in amount_paid),
+    // then the deposit's payment record — which must NOT add again.
+    await _enqueueSync(
+      txn,
+      DatabaseTables.tableCreditSales,
+      creditId,
+      SyncOperation.insert,
+      {...creditMap, 'last_updated': now},
+    );
+
+    final List<PaymentModel> payments = [];
+    if (initialDeposit > 0) {
+      final paymentId = _uuid.v4();
+      final paymentMap = {
+        'payment_id': paymentId,
         'credit_id': creditId,
-        'customer_name': customerName,
-        'phone_number': phoneNumber,
-        'products_description': productsDescription,
-        'total_quantity': totalQuantity,
-        'total_amount_owed': totalAmountOwed,
+        'payment_date': now,
         'amount_paid': initialDeposit,
-        'remaining_balance': remaining,
-        'due_date': dueDate,
-        'date_created': now,
-        'status': status.name,
+        'employee_id': employeeId,
+        'employee_name': employeeName,
+        'note': 'Initial Down Payment',
       };
+      await txn.insert(DatabaseTables.tablePayments, paymentMap);
+      payments.add(PaymentModel.fromMap(paymentMap));
+      await _enqueueSync(txn, DatabaseTables.tablePayments, paymentId, SyncOperation.insert, paymentMap);
+    }
 
-      await txn.insert(DatabaseTables.tableCreditSales, creditMap);
-
-      // Credit record first (it already includes the deposit in amount_paid),
-      // then the deposit's payment record — which must NOT add again.
-      await _enqueueSync(
-        txn,
-        DatabaseTables.tableCreditSales,
-        creditId,
-        SyncOperation.insert,
-        {...creditMap, 'last_updated': now},
-      );
-
-      final List<PaymentModel> payments = [];
-      if (initialDeposit > 0) {
-        final paymentId = _uuid.v4();
-        final paymentMap = {
-          'payment_id': paymentId,
-          'credit_id': creditId,
-          'payment_date': now,
-          'amount_paid': initialDeposit,
-          'employee_id': employeeId,
-          'employee_name': employeeName,
-          'note': 'Initial Down Payment',
-        };
-        await txn.insert(DatabaseTables.tablePayments, paymentMap);
-        payments.add(PaymentModel.fromMap(paymentMap));
-        await _enqueueSync(txn, DatabaseTables.tablePayments, paymentId, SyncOperation.insert, paymentMap);
-      }
-
-      return CreditSaleModel.fromMap(creditMap, payments: payments);
-    });
+    return CreditSaleModel.fromMap(creditMap, payments: payments);
   }
 
   /// Implements PRD Section 17 Automatic Completion Logic:

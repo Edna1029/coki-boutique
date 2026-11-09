@@ -4,7 +4,9 @@ import '../../../core/constants/app_dimensions.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/services/user_management_service.dart';
 import '../../../domain/entities/enums.dart';
+import '../../widgets/phone_number_field.dart';
 import '../../widgets/role_badge.dart';
+import '../../../core/utils/phone_number.dart';
 
 /// Owner-only screen to add staff, change their role, or remove their access.
 class UserManagementScreen extends StatefulWidget {
@@ -90,6 +92,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     bool obscure = true;
     bool saving = false;
     String? error;
+    var phoneCountry = PhoneNumbers.ethiopia;
+    String? phoneError;
 
     showDialog(
       context: context,
@@ -109,15 +113,27 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             setD(() => error = _message(UserAdminFailure.weakPassword));
             return;
           }
+          // Phone is optional for staff, but if given it must be a real number.
+          final digits = phoneCtrl.text.trim();
+          final badPhone = PhoneNumberField.validate(phoneCountry, digits, isAmharic: _am, required: false);
+          if (badPhone != null) {
+            setD(() {
+              phoneError = badPhone;
+              error = null;
+            });
+            return;
+          }
+          final phone = digits.isEmpty ? '' : PhoneNumbers.toE164(phoneCountry, digits);
           setD(() {
             saving = true;
             error = null;
+            phoneError = null;
           });
           try {
             final user = await _service.createUser(
               fullName: name,
               email: email,
-              phoneNumber: phoneCtrl.text,
+              phoneNumber: phone,
               role: role,
               temporaryPassword: password,
             );
@@ -170,10 +186,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     decoration: InputDecoration(labelText: _am ? 'ኢሜይል' : 'Email'),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
+                  PhoneNumberField(
                     controller: phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(labelText: _am ? 'ስልክ ቁጥር (አማራጭ)' : 'Phone (optional)'),
+                    country: phoneCountry,
+                    isAmharic: _am,
+                    enabled: !saving,
+                    labelText: _am ? 'ስልክ ቁጥር (አማራጭ)' : 'Phone (optional)',
+                    errorText: phoneError,
+                    onCountryChanged: (c) => setD(() {
+                      phoneCountry = c;
+                      phoneError = null;
+                    }),
+                    onChanged: (_) {
+                      if (phoneError != null) setD(() => phoneError = null);
+                    },
                   ),
                   const SizedBox(height: 10),
                   TextField(

@@ -74,6 +74,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       CreditSalesScreen(
         currentUser: widget.currentUser,
         isAmharic: isAmharic,
+        onGoToPos: () => _onTabTapped(2),
       ),
       ReportsScreen(
         isAmharic: isAmharic,
