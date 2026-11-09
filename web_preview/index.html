@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coki Boutique - Store Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-green: #10B981;
+      --primary-green-dark: #059669;
+      --primary-green-light: #D1FAE5;
+      --secondary-brown: #8B5E3C;
+      --secondary-brown-light: #F7EFE8;
+      
+      --bg-color: #F8FAFC;
+      --surface-color: #FFFFFF;
+      --card-bg: #FFFFFF;
+      --border-color: #E2E8F0;
+      --text-primary: #1F2937;
+      --text-secondary: #6B7280;
+      --text-muted: #9CA3AF;
+      
+      --status-pending: #F59E0B;
+      --status-partial: #3B82F6;
+      --status-paid: #10B981;
+      --status-error: #EF4444;
+
+      --radius-sm: 8px;
+      --radius-input: 12px;
+      --radius-btn: 14px;
+      --radius-card: 18px;
+      --radius-dialog: 20px;
+
+      --shadow-sm: 0 2px 4px rgba(0,0,0,0.04);
+      --shadow-card: 0 6px 14px rgba(0,0,0,0.05);
+      --shadow-float: 0 12px 30px rgba(0,0,0,0.12);
+    }
+
+    body.dark-mode {
+      --bg-color: #1E1E1E;
+      --surface-color: #2A2A2A;
+      --card-bg: #2A2A2A;
+      --border-color: #3F3F46;
+      --text-primary: #F3F4F6;
+      --text-secondary: #B0B0B0;
+      --text-muted: #71717A;
+      --secondary-brown: #A47551;
+      --shadow-card: 0 6px 14px rgba(0,0,0,0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Noto Sans', 'Noto Sans Ethiopic', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: #0f172a;
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    /* Simulation Control Toolbar */
+    .sim-toolbar {
+      width: 100%;
+      max-width: 1100px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      padding: 10px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: white;
+    }
+
+    .sim-toolbar .title-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sim-toolbar .badge {
+      background: var(--primary-green);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .sim-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sim-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .sim-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .sim-btn.active {
+      background: var(--primary-green);
+      border-color: var(--primary-green);
+    }
+
+    /* App Device Frame */
+    .app-viewport {
+      width: 100%;
+      max-width: 440px;
+      height: 880px;
+      background: var(--bg-color);
+      border-radius: 40px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 0 12px #27272a;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .app-viewport.tablet-view {
+      max-width: 1060px;
+      height: 780px;
+      border-radius: 24px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 0 10px #27272a;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      height: 38px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      z-index: 50;
+      background: transparent;
+    }
+
+    .app-viewport.tablet-view .status-bar {
+      display: none;
+    }
+
+    /* Main Container */
+    .app-main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Tablet Sidebar */
+    .tablet-sidebar {
+      width: 240px;
+      background: var(--surface-color);
+      border-right: 1px solid var(--border-color);
+      display: none;
+      flex-direction: column;
+      padding: 20px 14px;
+    }
+
+    .app-viewport.tablet-view .tablet-sidebar {
+      display: flex;
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 10px 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-brand .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--primary-green);
+      color: white;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+
+    .sidebar-link:hover {
+      background: rgba(16, 185, 129, 0.08);
+      color: var(--primary-green);
+    }
+
+    .sidebar-link.active {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--primary-green);
+    }
+
+    /* Content Area */
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-color);
+    }
+
+    /* Screen Views */
+    .screen {
+      display: none;
+      padding: 18px;
+      flex-direction: column;
+      min-height: 100%;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* LOGIN SCREEN */
+    .screen-login {
+      padding: 0;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1600') center/cover no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .login-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+    }
+
+    .login-card {
+      position: relative;
+      z-index: 10;
+      width: 90%;
+      max-width: 380px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: var(--radius-dialog);
+      padding: 30px;
+      box-shadow: var(--shadow-float);
+      color: #1f2937;
+    }
+
+    body.dark-mode .login-card {
+      background: rgba(42, 42, 42, 0.95);
+      color: #f3f4f6;
+    }
+
+    .login-logo {
+      width: 60px;
+      height: 60px;
+      background: var(--primary-green);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 28px;
+      margin: 0 auto 14px;
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-input);
+      font-size: 14px;
+      background: var(--surface-color);
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      border-color: var(--primary-green);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary-green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-btn);
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-green-dark);
+      transform: translateY(-1px);
+    }
+
+    .quick-roles {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .role-btn {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 6px;
+      border: 1px solid var(--secondary-brown);
+      color: var(--secondary-brown);
+      background: transparent;
+      cursor: pointer;
+    }
+
+    /* DASHBOARD */
+    .dash-header {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .app-viewport.tablet-view .kpi-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .kpi-card {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .kpi-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .kpi-title {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .kpi-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .kpi-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--text-primary);
+    }
+
+    .quick-actions-bar {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      margin-bottom: 20px;
+    }
+
+    .action-pill {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--primary-green);
+      padding: 10px 16px;
+      border-radius: var(--radius-btn);
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chart-container {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .chart-bars {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      height: 120px;
+      padding-top: 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+
+    .bar {
+      width: 22px;
+      background: var(--primary-green);
+      border-radius: 6px 6px 0 0;
+      transition: height 0.5s ease;
+    }
+
+    .bar.alt {
+      background: var(--secondary-brown);
+    }
+
+    /* INVENTORY */
+    .inventory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .filter-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+
+    .filter-chip {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      background: var(--surface-color);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .filter-chip.active {
+      background: var(--primary-green);
+      border-color: var(--primary-green);
+      color: white;
+    }
+
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .app-viewport.tablet-view .product-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .product-card {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .product-img {
+      height: 140px;
+      width: 100%;
+      object-fit: cover;
+    }
+
+    .product-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(139, 94, 60, 0.9);
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+
+    .product-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+    }
+
+    .product-title {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .product-sku {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .size-tags {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .size-tag {
+      background: rgba(0,0,0,0.06);
+      font-size: 9px;
+      font-weight: bold;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    .product-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .product-price {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--primary-green);
+    }
+
+    /* POS SCREEN */
+    .pos-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .app-viewport.tablet-view .pos-layout {
+      flex-direction: row;
+    }
+
+    .pos-catalog {
+      flex: 6;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pos-cart {
+      flex: 4;
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .cart-items {
+      flex: 1;
+      overflow-y: auto;
+      max-height: 260px;
+      margin: 12px 0;
+    }
+
+    .cart-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
+    .qty-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .qty-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-color);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    /* CREDIT SCREEN */
+    .credit-card {
+      background: var(--surface-color);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .credit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .status-pending { background: rgba(245, 158, 11, 0.15); color: var(--status-pending); }
+    .status-partial { background: rgba(59, 130, 246, 0.15); color: var(--status-partial); }
+    .status-paid { background: rgba(16, 185, 129, 0.15); color: var(--status-paid); }
+
+    .credit-meta {
+      background: rgba(0,0,0,0.03);
+      border-radius: var(--radius-input);
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+
+    /* Bottom Navigation */
+    .bottom-nav {
+      height: 64px;
+      background: var(--surface-color);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 40;
+    }
+
+    .app-viewport.tablet-view .bottom-nav {
+      display: none;
+    }
+
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .nav-tab.active {
+      color: var(--primary-green);
+    }
+
+    .nav-tab .icon {
+      font-size: 20px;
+    }
+
+    /* Thermal Receipt Modal */
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(2px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .receipt-box {
+      background: white;
+      color: black;
+      width: 100%;
+      max-width: 320px;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: var(--shadow-float);
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .receipt-line {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+    }
+
+    .receipt-divider {
+      border-top: 1px dashed #666;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Simulation Control Toolbar -->
+  <div class="sim-toolbar">
+    <div class="title-area">
+      <span style="font-size: 22px;">🛍️</span>
+      <div>
+        <strong id="sim-app-title">Coki Boutique - Store Management System</strong>
+        <div style="font-size: 11px; opacity: 0.8;">Clean Architecture & BLoC • SQLite Offline-First • Firebase Cloud Sync</div>
+      </div>
+      <span class="badge" id="role-badge">OWNER</span>
+    </div>
+
+    <div class="sim-controls">
+      <button class="sim-btn" id="lang-btn" onclick="toggleLanguage()">🌐 English / አማርኛ</button>
+      <button class="sim-btn" id="theme-btn" onclick="toggleTheme()">🌙 Dark Mode</button>
+      <button class="sim-btn" id="device-btn" onclick="toggleDevice()">📱 Mobile / 💻 Tablet</button>
+      <button class="sim-btn" onclick="resetToLogin()">🔒 Sign Out</button>
+    </div>
+  </div>
+
+  <!-- App Viewport Device Frame -->
+  <div class="app-viewport" id="viewport">
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span>09:41</span>
+      <span>●●● 5G &nbsp;🔋 100%</span>
+    </div>
+
+    <div class="app-main">
+      <!-- Tablet Sidebar -->
+      <div class="tablet-sidebar">
+        <div class="sidebar-brand">
+          <div class="logo-icon">👗</div>
+          <div>
+            <div style="font-weight: bold; font-size: 14px;" id="sidebar-store-name">Coki Boutique</div>
+            <div style="font-size: 10px; color: var(--text-muted);">Addis Ababa, Ethiopia</div>
+          </div>
+        </div>
+
+        <div class="sidebar-nav">
+          <div class="sidebar-link active" onclick="switchTab(0)"><span class="icon">📊</span> <span class="tab-label-dash">Dashboard</span></div>
+          <div class="sidebar-link" onclick="switchTab(1)"><span class="icon">🏷️</span> <span class="tab-label-inv">Inventory</span></div>
+          <div class="sidebar-link" onclick="switchTab(2)"><span class="icon">🛒</span> <span class="tab-label-pos">Sales POS</span></div>
+          <div class="sidebar-link" onclick="switchTab(3)"><span class="icon">💳</span> <span class="tab-label-crd">Credit Sales</span></div>
+          <div class="sidebar-link" onclick="switchTab(4)"><span class="icon">📈</span> <span class="tab-label-rep">Reports</span></div>
+          <div class="sidebar-link" onclick="switchTab(5)"><span class="icon">⚙️</span> <span class="tab-label-set">Settings</span></div>
+        </div>
+
+        <div style="padding: 10px; background: rgba(0,0,0,0.04); border-radius: 8px; font-size: 11px;">
+          <strong id="user-display-name">Edna Tadesse</strong>
+          <div style="color: var(--secondary-brown); font-weight: bold;" id="user-role-label">Store Owner</div>
+        </div>
+      </div>
+
+      <!-- Content Area -->
+      <div class="screen-content">
+
+        <!-- 1. DASHBOARD SCREEN -->
+        <div class="screen active" id="screen-0">
+          <div class="dash-header">
+            <div>
+              <div style="font-size: 11px; color: var(--text-secondary);" id="greeting-txt">Welcome back,</div>
+              <h2 style="font-size: 18px; font-weight: bold;" id="header-user-name">Edna Tadesse</h2>
+              <div style="font-size: 11px; color: var(--text-muted);" id="current-calendar-date">June 24, 2026 | Bole Store</div>
+            </div>
+            <div class="badge" style="background: rgba(139, 94, 60, 0.15); color: var(--secondary-brown);">COKI POS v1.0</div>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card" onclick="switchTab(1)">
+              <div class="kpi-top">
+                <span class="kpi-title" id="kpi-prod-txt">Total Products</span>
+                <span class="kpi-icon" style="background: rgba(16,185,129,0.12); color: var(--primary-green);">👗</span>
+              </div>
+              <div class="kpi-value" id="dash-prod-count">6</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Active boutique items</div>
+            </div>
+
+            <div class="kpi-card" onclick="switchTab(1)">
+              <div class="kpi-top">
+                <span class="kpi-title" id="kpi-stock-txt">Stock Count</span>
+                <span class="kpi-icon" style="background: rgba(139,94,60,0.12); color: var(--secondary-brown);">📦</span>
+              </div>
+              <div class="kpi-value" id="dash-stock-count">134</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Units in store</div>
+            </div>
+
+            <div class="kpi-card" onclick="switchTab(2)">
+              <div class="kpi-top">
+                <span class="kpi-title" id="kpi-sales-txt">Total Sales</span>
+                <span class="kpi-icon" style="background: rgba(16,185,129,0.12); color: var(--primary-green);">💰</span>
+              </div>
+              <div class="kpi-value" id="dash-sales-total">ETB 48,200.00</div>
+              <div style="font-size: 10px; color: var(--text-muted);">14 orders completed</div>
+            </div>
+
+            <div class="kpi-card" onclick="switchTab(3)">
+              <div class="kpi-top">
+                <span class="kpi-title" id="kpi-credit-txt">Credit Balance</span>
+                <span class="kpi-icon" style="background: rgba(245,158,11,0.12); color: var(--status-pending);">💳</span>
+              </div>
+              <div class="kpi-value" id="dash-credit-balance">ETB 12,700.00</div>
+              <div style="font-size: 10px; color: var(--status-pending); font-weight: bold;">2 active credits</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="quick-actions-bar">
+            <div class="action-pill" onclick="switchTab(2)"><span style="font-size: 14px;">⚡</span> <span id="qa-sale">New Sale</span></div>
+            <div class="action-pill" onclick="openAddProductModal()"><span style="font-size: 14px;">➕</span> <span id="qa-prod">Add Product</span></div>
+            <div class="action-pill" onclick="switchTab(3)"><span style="font-size: 14px;">📝</span> <span id="qa-credit">Credit Sale</span></div>
+            <div class="action-pill" onclick="switchTab(4)"><span style="font-size: 14px;">📊</span> <span id="qa-report">Export Excel</span></div>
+          </div>
+
+          <!-- Low Stock Alert -->
+          <div style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: var(--radius-card); padding: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 20px;">⚠️</span>
+              <div>
+                <strong style="font-size: 12px; color: var(--status-error);" id="alert-low-txt">Low Stock Alert: 2 Items</strong>
+                <div style="font-size: 10px; color: var(--text-secondary);">Habesha Kemis (Size XXL), Italian Slim Blazer</div>
+              </div>
+            </div>
+            <button class="sim-btn" style="background: var(--status-error); border: none;" onclick="switchTab(1)">Restock</button>
+          </div>
+
+          <!-- Weekly Sales Chart -->
+          <div class="chart-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <strong style="font-size: 13px;" id="chart-weekly-txt">Weekly Sales (ETB in Thousands)</strong>
+              <span style="color: var(--primary-green); font-size: 11px; font-weight: bold;">+18.5% Growth</span>
+            </div>
+            <div class="chart-bars">
+              <div class="bar-col"><div class="bar" style="height: 55px;"></div><span style="font-size: 9px;">Mon</span></div>
+              <div class="bar-col"><div class="bar" style="height: 75px;"></div><span style="font-size: 9px;">Tue</span></div>
+              <div class="bar-col"><div class="bar" style="height: 40px;"></div><span style="font-size: 9px;">Wed</span></div>
+              <div class="bar-col"><div class="bar" style="height: 90px;"></div><span style="font-size: 9px;">Thu</span></div>
+              <div class="bar-col"><div class="bar alt" style="height: 70px;"></div><span style="font-size: 9px;">Fri</span></div>
+              <div class="bar-col"><div class="bar" style="height: 105px;"></div><span style="font-size: 9px;">Sat</span></div>
+              <div class="bar-col"><div class="bar alt" style="height: 85px;"></div><span style="font-size: 9px;">Sun</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. INVENTORY SCREEN -->
+        <div class="screen" id="screen-1">
+          <div class="inventory-header">
+            <h2 style="font-size: 18px; font-weight: bold;" id="inv-head-title">Inventory</h2>
+            <div style="display: flex; gap: 8px;">
+              <button class="sim-btn" style="background: var(--surface-color); color: var(--text-primary); border-color: var(--border-color);" onclick="toggleInventoryView()" id="inv-view-toggle">📋 List View</button>
+              <button class="sim-btn" style="background: var(--primary-green); border: none;" onclick="openAddProductModal()">+ Add Product</button>
+            </div>
+          </div>
+
+          <input type="text" class="form-input" style="margin-bottom: 12px;" id="inv-search" placeholder="Search by name, SKU, barcode..." oninput="renderInventory()">
+
+          <div class="filter-scroll" id="cat-filters">
+            <div class="filter-chip active" onclick="setCategoryFilter('All', this)">All</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Traditional', this)">Traditional</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Dresses', this)">Dresses</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Formal Wear', this)">Formal Wear</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Shirts', this)">Shirts</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Jeans', this)">Jeans</div>
+            <div class="filter-chip" onclick="setCategoryFilter('Accessories', this)">Accessories</div>
+          </div>
+
+          <div class="product-grid" id="product-container">
+            <!-- Dynamic products injected here -->
+          </div>
+        </div>
+
+        <!-- 3. POS SCREEN -->
+        <div class="screen" id="screen-2">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: bold;" id="pos-head-title">Sales Point of Sale (POS)</h2>
+            <div style="display: flex; gap: 6px;">
+              <button class="sim-btn" style="background: var(--primary-green); border: none;" onclick="simulateBarcodeScan()">📷 Barcode</button>
+              <button class="sim-btn" style="background: var(--secondary-brown); border: none;" onclick="simulateBarcodeScan()">📱 QR Scan</button>
+            </div>
+          </div>
+
+          <div class="pos-layout">
+            <div class="pos-catalog">
+              <input type="text" class="form-input" style="margin-bottom: 10px;" id="pos-search" placeholder="Search product for sale..." oninput="renderPosCatalog()">
+              <div class="product-grid" id="pos-grid" style="max-height: 480px; overflow-y: auto;">
+                <!-- POS Catalog injected here -->
+              </div>
+            </div>
+
+            <!-- Cart Section -->
+            <div class="pos-cart">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                <strong style="font-size: 14px;" id="cart-title">Shopping Cart</strong>
+                <span id="cart-count" style="font-size: 11px; color: var(--text-muted);">0 items</span>
+              </div>
+
+              <div class="cart-items" id="cart-items-box">
+                <div style="text-align: center; color: var(--text-muted); padding: 30px 0;" id="empty-cart-msg">
+                  Cart is empty.<br>Tap any product to add.
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+                <div class="receipt-line">
+                  <span id="subtotal-txt">Subtotal</span>
+                  <strong id="cart-subtotal">ETB 0.00</strong>
+                </div>
+                <div class="receipt-line">
+                  <span id="tax-txt">Tax (VAT 15%)</span>
+                  <span id="cart-tax">ETB 0.00</span>
+                </div>
+                <div class="receipt-line" style="font-size: 16px; margin-top: 6px;">
+                  <strong id="total-txt">Total Amount</strong>
+                  <strong style="color: var(--primary-green);" id="cart-total">ETB 0.00</strong>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin: 12px 0;">
+                  <label style="flex: 1; border: 1px solid var(--primary-green); padding: 6px; border-radius: 8px; font-size: 11px; text-align: center; cursor: pointer; background: rgba(16,185,129,0.1);">
+                    <input type="radio" name="pay-method" value="Cash" checked> Cash (ጥሬ ገንዘብ)
+                  </label>
+                  <label style="flex: 1; border: 1px solid var(--border-color); padding: 6px; border-radius: 8px; font-size: 11px; text-align: center; cursor: pointer;">
+                    <input type="radio" name="pay-method" value="Telebirr"> Telebirr / CBE
+                  </label>
+                </div>
+
+                <button class="btn-primary" onclick="completeSale()" id="complete-sale-btn">Complete Sale</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. CREDIT SALES SCREEN -->
+        <div class="screen" id="screen-3">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: bold;" id="crd-head-title">Customer Credit Accounts</h2>
+            <button class="sim-btn" style="background: var(--primary-green); border: none;" onclick="openNewCreditModal()">+ New Credit</button>
+          </div>
+
+          <div id="credit-cards-box">
+            <!-- Dynamic Credit accounts injected here -->
+          </div>
+        </div>
+
+        <!-- 5. REPORTS SCREEN -->
+        <div class="screen" id="screen-4">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="font-size: 18px; font-weight: bold;" id="rep-head-title">Financial & Inventory Reports</h2>
+            <button class="sim-btn" style="background: var(--primary-green); border: none;" onclick="exportExcelSim()">📥 Export .xlsx</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="kpi-card">
+              <div class="kpi-title" id="rep-collected-txt">Total Credit Collected</div>
+              <div class="kpi-value" style="color: var(--primary-green);" id="rep-collected-val">ETB 8,800.00</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-title" id="rep-unpaid-txt">Total Unpaid Balance</div>
+              <div class="kpi-value" style="color: var(--status-error);" id="rep-unpaid-val">ETB 12,700.00</div>
+            </div>
+          </div>
+
+          <div class="chart-container">
+            <strong style="font-size: 13px;" id="rep-trend-txt">Monthly Revenue Trajectory (ETB)</strong>
+            <div style="margin-top: 14px; display: flex; align-items: flex-end; justify-content: space-between; height: 130px;">
+              <div class="bar-col"><div class="bar" style="height: 40px;"></div><span style="font-size: 9px;">Jan</span></div>
+              <div class="bar-col"><div class="bar" style="height: 60px;"></div><span style="font-size: 9px;">Feb</span></div>
+              <div class="bar-col"><div class="bar" style="height: 55px;"></div><span style="font-size: 9px;">Mar</span></div>
+              <div class="bar-col"><div class="bar" style="height: 75px;"></div><span style="font-size: 9px;">Apr</span></div>
+              <div class="bar-col"><div class="bar" style="height: 95px;"></div><span style="font-size: 9px;">May</span></div>
+              <div class="bar-col"><div class="bar" style="height: 120px;"></div><span style="font-size: 9px;">Jun</span></div>
+            </div>
+          </div>
+
+          <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 16px;">
+            <strong style="font-size: 13px; margin-bottom: 10px; display: block;" id="excel-files-txt">Automatically Maintained Export Files</strong>
+            <div style="font-size: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                <span>📄 Inventory.xlsx (Products, variants, stock)</span>
+                <span class="badge" style="background: var(--primary-green);">Updated</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                <span>📄 Sales.xlsx (Sales transactions, revenue)</span>
+                <span class="badge" style="background: var(--primary-green);">Updated</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>📄 CreditSales.xlsx (Customer credit logs)</span>
+                <span class="badge" style="background: var(--primary-green);">Updated</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. SETTINGS SCREEN -->
+        <div class="screen" id="screen-5">
+          <h2 style="font-size: 18px; font-weight: bold; margin-bottom: 16px;" id="set-head-title">System Settings</h2>
+
+          <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 16px; margin-bottom: 16px;">
+            <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px;" id="set-storage-title">Database & Sync Status</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px;">
+              <span>Primary Engine:</span>
+              <strong style="color: var(--primary-green);">SQLite (Local Offline-First)</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px;">
+              <span>Cloud Sync:</span>
+              <strong style="color: var(--primary-green);">Firebase Firestore Connected</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+              <span>Conflict Rule:</span>
+              <span>Latest Timestamp Wins</span>
+            </div>
+            <button class="btn-primary" style="margin-top: 14px;" onclick="simulateCloudSync()" id="sync-now-btn">⚡ Sync with Firestore Now</button>
+          </div>
+
+          <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 16px;">
+            <div style="font-size: 12px; font-weight: bold; margin-bottom: 12px;">System Backups (Owner Only)</div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Export a complete encrypted JSON backup of the entire database.</p>
+            <button class="sim-btn" style="background: var(--secondary-brown); border: none; width: 100%; padding: 10px;" onclick="simulateBackup()">💾 Create Full Database Backup</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <div class="bottom-nav">
+      <div class="nav-tab active" onclick="switchTab(0)"><span class="icon">📊</span><span class="tab-label-dash">Dashboard</span></div>
+      <div class="nav-tab" onclick="switchTab(1)"><span class="icon">🏷️</span><span class="tab-label-inv">Inventory</span></div>
+      <div class="nav-tab" onclick="switchTab(2)"><span class="icon">🛒</span><span class="tab-label-pos">POS</span></div>
+      <div class="nav-tab" onclick="switchTab(3)"><span class="icon">💳</span><span class="tab-label-crd">Credit</span></div>
+      <div class="nav-tab" onclick="switchTab(4)"><span class="icon">📈</span><span class="tab-label-rep">Reports</span></div>
+      <div class="nav-tab" onclick="switchTab(5)"><span class="icon">⚙️</span><span class="tab-label-set">Settings</span></div>
+    </div>
+
+    <!-- LOGIN OVERLAY MODAL -->
+    <div class="screen-login" id="login-overlay">
+      <div class="login-overlay"></div>
+      <div class="login-card">
+        <div class="login-logo">👗</div>
+        <h2 style="text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 4px;" id="login-store-title">Coki Boutique</h2>
+        <div style="text-align: center; font-size: 11px; color: #6b7280; margin-bottom: 20px;" id="login-store-sub">Clothing & Fashion Accessories</div>
+
+        <div class="form-group">
+          <label class="form-label" id="login-email-lbl">Email Address</label>
+          <input type="email" class="form-input" id="login-email" value="owner@cokiboutique.com">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" id="login-pass-lbl">Password</label>
+          <input type="password" class="form-input" id="login-pass" value="••••••••">
+        </div>
+
+        <button class="btn-primary" onclick="performLogin()" id="login-btn">Sign In</button>
+
+        <div style="text-align: center; font-size: 11px; color: #6b7280; margin: 16px 0 8px;" id="quick-role-txt">Quick Demo Role Login</div>
+        <div class="quick-roles">
+          <button class="role-btn" onclick="quickLogin('Owner', 'owner@cokiboutique.com')">Owner</button>
+          <button class="role-btn" onclick="quickLogin('Admin', 'admin@cokiboutique.com')">Admin</button>
+          <button class="role-btn" onclick="quickLogin('Employee', 'staff@cokiboutique.com')">Staff</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- THERMAL RECEIPT MODAL -->
+    <div class="modal-backdrop" id="receipt-modal">
+      <div class="receipt-box">
+        <div style="text-align: center; font-weight: bold; font-size: 15px;" id="rec-store-name">COKI BOUTIQUE</div>
+        <div style="text-align: center; font-size: 10px; color: #666;" id="rec-store-tag">Clothing & Fashion Accessories</div>
+        <div style="text-align: center; font-size: 9px; color: #888;">Bole Medhanialem, Addis Ababa</div>
+        <div class="receipt-divider"></div>
+        <div class="receipt-line"><span>Receipt #:</span><strong id="rec-id">CK-89421</strong></div>
+        <div class="receipt-line"><span>Date:</span><span id="rec-date"></span></div>
+        <div class="receipt-line"><span>Cashier:</span><span id="rec-cashier">Edna Tadesse</span></div>
+        <div class="receipt-divider"></div>
+        <div id="rec-items-list"></div>
+        <div class="receipt-divider"></div>
+        <div class="receipt-line"><span>Subtotal:</span><span id="rec-subtotal"></span></div>
+        <div class="receipt-line"><span>Tax (15%):</span><span id="rec-tax"></span></div>
+        <div class="receipt-line" style="font-size: 14px; font-weight: bold;"><span>TOTAL:</span><span id="rec-total"></span></div>
+        <div class="receipt-line"><span>Method:</span><span id="rec-method">CASH</span></div>
+        <div class="receipt-divider"></div>
+        <div style="text-align: center; font-style: italic; font-size: 10px; margin-top: 10px;" id="rec-thank-you">
+          Thank you for shopping at Coki Boutique!<br>Exchanges accepted within 7 days.
+        </div>
+        <div style="margin-top: 14px; display: flex; gap: 8px;">
+          <button class="btn-primary" style="padding: 8px;" onclick="closeReceipt()">Close</button>
+          <button class="btn-primary" style="background: var(--secondary-brown); padding: 8px;" onclick="window.print()">🖨️ Print</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD PRODUCT MODAL -->
+    <div class="modal-backdrop" id="add-prod-modal">
+      <div class="login-card" style="width: 95%; max-width: 440px;">
+        <h3 style="margin-bottom: 14px; font-size: 16px;" id="modal-add-title">Add New Product</h3>
+        <div class="form-group">
+          <label class="form-label">Product Name</label>
+          <input type="text" class="form-input" id="new-p-name" placeholder="e.g. Silk Evening Dress">
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Category</label>
+            <select class="form-input" id="new-p-cat">
+              <option>Traditional</option>
+              <option>Dresses</option>
+              <option>Formal Wear</option>
+              <option>Shirts</option>
+              <option>Jeans</option>
+              <option>Accessories</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Price (ETB)</label>
+            <input type="number" class="form-input" id="new-p-price" placeholder="3200">
+          </div>
+        </div>
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 6px;">Inventory Rule: Stock Per Size</div>
+        <div style="display: flex; gap: 6px; margin-bottom: 14px;">
+          <input type="number" class="form-input" style="padding: 6px; text-align: center;" placeholder="S: 4" id="size-s" value="4">
+          <input type="number" class="form-input" style="padding: 6px; text-align: center;" placeholder="M: 8" id="size-m" value="8">
+          <input type="number" class="form-input" style="padding: 6px; text-align: center;" placeholder="L: 6" id="size-l" value="6">
+          <input type="number" class="form-input" style="padding: 6px; text-align: center;" placeholder="XL: 2" id="size-xl" value="2">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="sim-btn" style="flex: 1; background: #9ca3af;" onclick="closeAddProductModal()">Cancel</button>
+          <button class="btn-primary" style="flex: 2;" onclick="saveNewProduct()">Save Product</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECORD PAYMENT MODAL -->
+    <div class="modal-backdrop" id="payment-modal">
+      <div class="login-card" style="width: 90%; max-width: 360px;">
+        <h3 style="margin-bottom: 10px; font-size: 16px;" id="modal-pay-title">Record Payment</h3>
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;" id="pay-customer-meta">Customer: Almaz Bekele</p>
+        <div class="form-group">
+          <label class="form-label">Payment Amount (ETB)</label>
+          <input type="number" class="form-input" id="pay-amount" placeholder="6500">
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 14px;">
+          <button class="sim-btn" style="flex: 1; background: #9ca3af;" onclick="closePaymentModal()">Cancel</button>
+          <button class="btn-primary" style="flex: 2;" onclick="applyPayment()">Confirm Payment</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // App State
+    let isAmharic = false;
+    let isDarkMode = false;
+    let isTablet = false;
+    let isCardView = true;
+    let currentRole = 'Owner';
+    let currentActiveTab = 0;
+
+    // Sample Boutique Data
+    let products = [
+      {
+        id: 'prod_01',
+        name: 'Habesha Kemis Traditional Silk Dress',
+        sku: 'CK-DRS-001',
+        category: 'Traditional',
+        brand: 'Coki Collection',
+        price: 8500,
+        img: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800',
+        sizes: { S: 4, M: 8, L: 6, XL: 3, XXL: 1 }
+      },
+      {
+        id: 'prod_02',
+        name: 'Italian Tailored Slim Blazer',
+        sku: 'CK-BLZ-002',
+        category: 'Formal Wear',
+        brand: 'Milano Sartoriale',
+        price: 6200,
+        img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800',
+        sizes: { S: 2, M: 10, L: 7, XL: 4, XXL: 2 }
+      },
+      {
+        id: 'prod_03',
+        name: 'Premium Cotton Floral Maxi Dress',
+        sku: 'CK-DRS-003',
+        category: 'Dresses',
+        brand: 'Zara Mode',
+        price: 3400,
+        img: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=800',
+        sizes: { S: 6, M: 12, L: 9, XL: 5, XXL: 0 }
+      },
+      {
+        id: 'prod_04',
+        name: 'Urban Stretch Oxford Shirt',
+        sku: 'CK-SHT-004',
+        category: 'Shirts',
+        brand: 'Polo Ralph',
+        price: 2200,
+        img: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800',
+        sizes: { S: 8, M: 15, L: 12, XL: 6, XXL: 3 }
+      },
+      {
+        id: 'prod_05',
+        name: 'Handcrafted Leather Handbag',
+        sku: 'CK-BAG-005',
+        category: 'Accessories',
+        brand: 'Addis Craft',
+        price: 4800,
+        img: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
+        sizes: { M: 14 }
+      },
+      {
+        id: 'prod_06',
+        name: 'Classic Straight Leg Denim Jeans',
+        sku: 'CK-JNS-006',
+        category: 'Jeans',
+        brand: 'Levi Premium',
+        price: 2900,
+        img: 'https://images.unsplash.com/photo-1542272604-780c96856592?w=800',
+        sizes: { S: 5, M: 10, L: 8, XL: 4, XXL: 1 }
+      }
+    ];
+
+    let creditAccounts = [
+      {
+        id: 'crd_01',
+        customer: 'Almaz Bekele',
+        phone: '+251 911 445 566',
+        desc: 'Habesha Kemis (Size M) + Silk Scarf',
+        owed: 10500,
+        paid: 4000,
+        due: '2026-07-08',
+        status: 'partiallyPaid'
+      },
+      {
+        id: 'crd_02',
+        customer: 'Dawit Haile',
+        phone: '+251 922 556 677',
+        desc: 'Italian Tailored Slim Blazer (Size L)',
+        owed: 6200,
+        paid: 0,
+        due: '2026-07-01',
+        status: 'pending'
+      },
+      {
+        id: 'crd_03',
+        customer: 'Tigist Tadesse',
+        phone: '+251 933 667 788',
+        desc: 'Handcrafted Leather Handbag',
+        owed: 4800,
+        paid: 4800,
+        due: '2026-06-21',
+        status: 'fullyPaid'
+      }
+    ];
+
+    let cart = [];
+    let selectedCatFilter = 'All';
+    let activeCreditForPayment = null;
+
+    // Formatting Functions
+    function formatCurrency(amount) {
+      const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return isAmharic ? `${formatted} ብር` : `ETB ${formatted}`;
+    }
+
+    // Switch Navigation Tabs
+    function switchTab(index) {
+      currentActiveTab = index;
+      document.querySelectorAll('.screen').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+      document.querySelectorAll('.nav-tab').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+      document.querySelectorAll('.sidebar-link').forEach((el, i) => {
+        el.classList.toggle('active', i === index);
+      });
+      if (index === 1) renderInventory();
+      if (index === 2) renderPosCatalog();
+      if (index === 3) renderCreditAccounts();
+    }
+
+    // Toggle Language (English <-> Amharic)
+    function toggleLanguage() {
+      isAmharic = !isAmharic;
+      updateLocalization();
+    }
+
+    function updateLocalization() {
+      const dates = isAmharic ? '24 ሰኔ 2018 | ቦሌ ቅርንጫፍ' : 'June 24, 2026 | Bole Store';
+      document.getElementById('current-calendar-date').innerText = dates;
+
+      // Labels
+      document.querySelectorAll('.tab-label-dash').forEach(el => el.innerText = isAmharic ? 'ዳሽቦርድ' : 'Dashboard');
+      document.querySelectorAll('.tab-label-inv').forEach(el => el.innerText = isAmharic ? 'ዕቃዎች' : 'Inventory');
+      document.querySelectorAll('.tab-label-pos').forEach(el => el.innerText = isAmharic ? 'ሽያጭ' : 'Sales POS');
+      document.querySelectorAll('.tab-label-crd').forEach(el => el.innerText = isAmharic ? 'ብድር' : 'Credit');
+      document.querySelectorAll('.tab-label-rep').forEach(el => el.innerText = isAmharic ? 'ሪፖርት' : 'Reports');
+      document.querySelectorAll('.tab-label-set').forEach(el => el.innerText = isAmharic ? 'ቅንብር' : 'Settings');
+
+      document.getElementById('kpi-prod-txt').innerText = isAmharic ? 'ጠቅላላ ምርቶች' : 'Total Products';
+      document.getElementById('kpi-stock-txt').innerText = isAmharic ? 'የክምችት መጠን' : 'Stock Count';
+      document.getElementById('kpi-sales-txt').innerText = isAmharic ? 'ጠቅላላ ሽያጭ' : 'Total Sales';
+      document.getElementById('kpi-credit-txt').innerText = isAmharic ? 'ቀሪ ብድር' : 'Credit Balance';
+
+      document.getElementById('dash-sales-total').innerText = formatCurrency(48200);
+      document.getElementById('dash-credit-balance').innerText = formatCurrency(12700);
+
+      renderInventory();
+      renderPosCatalog();
+      renderCart();
+      renderCreditAccounts();
+    }
+
+    // Toggle Dark Mode
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      document.body.classList.toggle('dark-mode', isDarkMode);
+      document.getElementById('theme-btn').innerText = isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode';
+    }
+
+    // Toggle Mobile / Tablet
+    function toggleDevice() {
+      isTablet = !isTablet;
+      const vp = document.getElementById('viewport');
+      vp.classList.toggle('tablet-view', isTablet);
+      document.getElementById('device-btn').innerText = isTablet ? '📱 Mobile Frame' : '💻 Tablet View';
+    }
+
+    // Render Inventory
+    function renderInventory() {
+      const container = document.getElementById('product-container');
+      const query = (document.getElementById('inv-search').value || '').toLowerCase();
+
+      const filtered = products.filter(p => {
+        const matchQuery = p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query);
+        const matchCat = selectedCatFilter === 'All' || p.category === selectedCatFilter;
+        return matchQuery && matchCat;
+      });
+
+      if (isCardView) {
+        container.className = 'product-grid';
+        container.innerHTML = filtered.map(p => {
+          const totalStock = Object.values(p.sizes).reduce((a, b) => a + b, 0);
+          return `
+            <div class="product-card" onclick="alert('${p.name}\\nTotal Stock: ${totalStock}\\nSizes: ' + JSON.stringify(p.sizes))">
+              <span class="product-badge">${p.category}</span>
+              <img src="${p.img}" class="product-img">
+              <div class="product-body">
+                <div>
+                  <div class="product-title">${p.name}</div>
+                  <div class="product-sku">SKU: ${p.sku}</div>
+                  <div class="size-tags">
+                    ${Object.entries(p.sizes).map(([sz, qty]) => `<span class="size-tag">${sz}: ${qty}</span>`).join('')}
+                  </div>
+                </div>
+                <div class="product-foot">
+                  <span class="product-price">${formatCurrency(p.price)}</span>
+                  <span style="font-size: 11px; font-weight: bold; color: ${totalStock <= 5 ? 'var(--status-error)' : 'var(--text-secondary)'};">
+                    ${totalStock} in stock
+                  </span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } else {
+        container.className = '';
+        container.innerHTML = filtered.map(p => {
+          const totalStock = Object.values(p.sizes).reduce((a, b) => a + b, 0);
+          return `
+            <div style="background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-card); padding: 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <img src="${p.img}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;">
+                <div>
+                  <strong style="font-size: 13px;">${p.name}</strong>
+                  <div style="font-size: 11px; color: var(--text-muted);">SKU: ${p.sku} | ${p.brand}</div>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <strong style="color: var(--primary-green); font-size: 13px;">${formatCurrency(p.price)}</strong>
+                <div style="font-size: 10px; color: var(--text-muted);">${totalStock} units</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    function toggleInventoryView() {
+      isCardView = !isCardView;
+      document.getElementById('inv-view-toggle').innerText = isCardView ? '📋 List View' : '🔲 Card View';
+      renderInventory();
+    }
+
+    function setCategoryFilter(cat, btn) {
+      selectedCatFilter = cat;
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      renderInventory();
+    }
+
+    // POS & Cart
+    function renderPosCatalog() {
+      const container = document.getElementById('pos-grid');
+      const query = (document.getElementById('pos-search').value || '').toLowerCase();
+      const filtered = products.filter(p => p.name.toLowerCase().includes(query) || p.sku.toLowerCase().includes(query));
+
+      container.innerHTML = filtered.map(p => {
+        const totalStock = Object.values(p.sizes).reduce((a, b) => a + b, 0);
+        return `
+          <div class="product-card" onclick="addToCart('${p.id}')">
+            <span class="product-badge">${p.category}</span>
+            <img src="${p.img}" style="height: 110px; width: 100%; object-fit: cover;">
+            <div style="padding: 8px;">
+              <div style="font-size: 12px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                <span style="color: var(--primary-green); font-weight: bold; font-size: 12px;">${formatCurrency(p.price)}</span>
+                <span style="font-size: 10px; color: var(--text-muted);">${totalStock} left</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addToCart(productId) {
+      const prod = products.find(p => p.id === productId);
+      if (!prod) return;
+      const exist = cart.find(c => c.product.id === productId);
+      if (exist) {
+        exist.qty += 1;
+      } else {
+        cart.push({ product: prod, size: 'M', qty: 1 });
+      }
+      renderCart();
+    }
+
+    function updateCartQty(idx, delta) {
+      cart[idx].qty += delta;
+      if (cart[idx].qty <= 0) {
+        cart.splice(idx, 1);
+      }
+      renderCart();
+    }
+
+    function renderCart() {
+      const box = document.getElementById('cart-items-box');
+      const countEl = document.getElementById('cart-count');
+      const totalUnits = cart.reduce((a, b) => a + b.qty, 0);
+      countEl.innerText = `${totalUnits} items`;
+
+      if (cart.length === 0) {
+        box.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 30px 0;">Cart is empty.<br>Tap any product to add.</div>`;
+        document.getElementById('cart-subtotal').innerText = formatCurrency(0);
+        document.getElementById('cart-tax').innerText = formatCurrency(0);
+        document.getElementById('cart-total').innerText = formatCurrency(0);
+        return;
+      }
+
+      const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+      const tax = subtotal * 0.15;
+      const total = subtotal + tax;
+
+      box.innerHTML = cart.map((item, idx) => `
+        <div class="cart-item">
+          <div>
+            <strong>${item.product.name}</strong>
+            <div style="font-size: 11px; color: var(--text-muted);">${item.size} • ${formatCurrency(item.product.price)}</div>
+          </div>
+          <div class="qty-ctrl">
+            <button class="qty-btn" onclick="updateCartQty(${idx}, -1)">-</button>
+            <span style="font-weight: bold;">${item.qty}</span>
+            <button class="qty-btn" onclick="updateCartQty(${idx}, 1)">+</button>
+          </div>
+          <strong style="color: var(--primary-green);">${formatCurrency(item.product.price * item.qty)}</strong>
+        </div>
+      `).join('');
+
+      document.getElementById('cart-subtotal').innerText = formatCurrency(subtotal);
+      document.getElementById('cart-tax').innerText = formatCurrency(tax);
+      document.getElementById('cart-total').innerText = formatCurrency(total);
+    }
+
+    function completeSale() {
+      if (cart.length === 0) return;
+      const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+      const tax = subtotal * 0.15;
+      const total = subtotal + tax;
+
+      // Deduct product stock per inventory rules
+      cart.forEach(item => {
+        if (item.product.sizes[item.size]) {
+          item.product.sizes[item.size] = Math.max(0, item.product.sizes[item.size] - item.qty);
+        }
+      });
+
+      // Prepare receipt
+      document.getElementById('rec-id').innerText = 'CK-' + Math.floor(10000 + Math.random() * 90000);
+      document.getElementById('rec-date').innerText = new Date().toLocaleString();
+      document.getElementById('rec-subtotal').innerText = formatCurrency(subtotal);
+      document.getElementById('rec-tax').innerText = formatCurrency(tax);
+      document.getElementById('rec-total').innerText = formatCurrency(total);
+      document.getElementById('rec-items-list').innerHTML = cart.map(item => `
+        <div class="receipt-line">
+          <span>${item.product.name} (${item.size}) x${item.qty}</span>
+          <span>${formatCurrency(item.product.price * item.qty)}</span>
+        </div>
+      `).join('');
+
+      cart = [];
+      renderCart();
+      renderInventory();
+      renderPosCatalog();
+
+      document.getElementById('receipt-modal').classList.add('active');
+    }
+
+    function closeReceipt() {
+      document.getElementById('receipt-modal').classList.remove('active');
+    }
+
+    function simulateBarcodeScan() {
+      const p = products[Math.floor(Math.random() * products.length)];
+      addToCart(p.id);
+      alert(`Scanned Barcode: ${p.sku} - ${p.name} added to cart!`);
+    }
+
+    // Credit Sales Screen
+    function renderCreditAccounts() {
+      const box = document.getElementById('credit-cards-box');
+      box.innerHTML = creditAccounts.map(c => {
+        const remaining = c.owed - c.paid;
+        let statusBadge = '';
+        if (remaining <= 0) {
+          statusBadge = `<span class="status-badge status-paid">Fully Paid</span>`;
+        } else if (c.paid > 0) {
+          statusBadge = `<span class="status-badge status-partial">Partially Paid</span>`;
+        } else {
+          statusBadge = `<span class="status-badge status-pending">Pending</span>`;
+        }
+
+        return `
+          <div class="credit-card">
+            <div class="credit-header">
+              <div>
+                <strong style="font-size: 14px;">${c.customer}</strong>
+                <div style="font-size: 11px; color: var(--text-muted);">${c.phone}</div>
+              </div>
+              ${statusBadge}
+            </div>
+            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">${c.desc}</div>
+            <div class="credit-meta">
+              <div>Owed: <strong>${formatCurrency(c.owed)}</strong></div>
+              <div>Paid: <strong style="color: var(--primary-green);">${formatCurrency(c.paid)}</strong></div>
+              <div>Balance: <strong style="color: ${remaining > 0 ? 'var(--status-error)' : 'var(--primary-green)'};">${formatCurrency(remaining)}</strong></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+              <span style="font-size: 11px; color: var(--text-muted);">Due: ${c.due}</span>
+              ${remaining > 0 ? `<button class="sim-btn" style="background: var(--primary-green); border: none;" onclick="openPaymentModal('${c.id}')">💳 Record Payment</button>` : `<span style="font-size: 11px; color: var(--primary-green); font-weight: bold;">✓ Settled</span>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openPaymentModal(creditId) {
+      activeCreditForPayment = creditAccounts.find(c => c.id === creditId);
+      if (!activeCreditForPayment) return;
+      document.getElementById('pay-customer-meta').innerText = `Customer: ${activeCreditForPayment.customer} | Balance: ${formatCurrency(activeCreditForPayment.owed - activeCreditForPayment.paid)}`;
+      document.getElementById('pay-amount').value = activeCreditForPayment.owed - activeCreditForPayment.paid;
+      document.getElementById('payment-modal').classList.add('active');
+    }
+
+    function closePaymentModal() {
+      document.getElementById('payment-modal').classList.remove('active');
+    }
+
+    function applyPayment() {
+      const amt = parseFloat(document.getElementById('pay-amount').value) || 0;
+      if (amt <= 0 || !activeCreditForPayment) return;
+      activeCreditForPayment.paid += amt;
+      if (activeCreditForPayment.paid >= activeCreditForPayment.owed) {
+        activeCreditForPayment.paid = activeCreditForPayment.owed;
+        activeCreditForPayment.status = 'fullyPaid';
+      } else {
+        activeCreditForPayment.status = 'partiallyPaid';
+      }
+      closePaymentModal();
+      renderCreditAccounts();
+      alert(`Payment of ${formatCurrency(amt)} recorded! SQLite updated and synced.`);
+    }
+
+    // Add Product Modal & Section 11 Inventory Rule
+    function openAddProductModal() {
+      document.getElementById('add-prod-modal').classList.add('active');
+    }
+
+    function closeAddProductModal() {
+      document.getElementById('add-prod-modal').classList.remove('active');
+    }
+
+    function saveNewProduct() {
+      const name = document.getElementById('new-p-name').value;
+      const cat = document.getElementById('new-p-cat').value;
+      const price = parseFloat(document.getElementById('new-p-price').value) || 3000;
+      const s = parseInt(document.getElementById('size-s').value) || 0;
+      const m = parseInt(document.getElementById('size-m').value) || 0;
+      const l = parseInt(document.getElementById('size-l').value) || 0;
+      const xl = parseInt(document.getElementById('size-xl').value) || 0;
+
+      if (!name) {
+        alert('Please enter a product name');
+        return;
+      }
+
+      // Check PRD Section 11 Inventory Rule: Match name -> Increase stock instead of duplicate!
+      const existing = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        existing.sizes.S = (existing.sizes.S || 0) + s;
+        existing.sizes.M = (existing.sizes.M || 0) + m;
+        existing.sizes.L = (existing.sizes.L || 0) + l;
+        existing.sizes.XL = (existing.sizes.XL || 0) + xl;
+        alert(`Inventory Rule Applied: '${name}' already exists. Restocked variant quantities instead of creating duplicate!`);
+      } else {
+        products.push({
+          id: 'prod_' + (products.length + 1),
+          name: name,
+          sku: 'CK-' + Math.floor(100 + Math.random() * 900),
+          category: cat,
+          brand: 'Coki Boutique',
+          price: price,
+          img: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800',
+          sizes: { S: s, M: m, L: l, XL: xl }
+        });
+        alert(`Product '${name}' created and added to SQLite inventory.`);
+      }
+
+      closeAddProductModal();
+      renderInventory();
+    }
+
+    // Login Management
+    function performLogin() {
+      document.getElementById('login-overlay').style.display = 'none';
+    }
+
+    function quickLogin(role, email) {
+      currentRole = role;
+      document.getElementById('role-badge').innerText = role.toUpperCase();
+      document.getElementById('user-role-label').innerText = role === 'Owner' ? 'Store Owner' : (role === 'Admin' ? 'Administrator' : 'Staff / Cashier');
+      document.getElementById('user-display-name').innerText = role === 'Owner' ? 'Edna Tadesse' : (role === 'Admin' ? 'Abebe Bikila' : 'Selamawit Desta');
+      document.getElementById('header-user-name').innerText = role === 'Owner' ? 'Edna Tadesse' : (role === 'Admin' ? 'Abebe Bikila' : 'Selamawit Desta');
+      document.getElementById('login-overlay').style.display = 'none';
+    }
+
+    function resetToLogin() {
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+
+    // Export Excel Simulation
+    function exportExcelSim() {
+      alert('Generating and maintaining:\n• Inventory.xlsx\n• Sales.xlsx\n• CreditSales.xlsx\nFiles downloaded and saved to local documents!');
+    }
+
+    function simulateCloudSync() {
+      alert('Processing SQLite sync queue...\n1. Uploading SQLite changes\n2. Downloading Firestore updates\n3. Conflict Resolution: Latest Timestamp Wins\n✓ Cloud sync completed successfully!');
+    }
+
+    function simulateBackup() {
+      alert('Owner Action:\nExporting full database JSON archive...\nBackup coki_backup_' + Date.now() + '.json created successfully!');
+    }
+
+    // Init
+    renderInventory();
+    renderPosCatalog();
+    renderCreditAccounts();
+  </script>
+</body>
+</html>

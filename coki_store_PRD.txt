@@ -1,0 +1,949 @@
+ PRODUCT REQUIREMENTS DOCUMENT (PRD)
+
+# Store Management System
+
+**Version:** 1.0
+**Platform:** Android Mobile Application
+**Framework:** Flutter
+**Industry:** Clothing & Accessories Retail
+**Target Users:** Store Owners, Administrators, Employees
+
+---
+
+# 1. Project Overview
+
+## Purpose
+
+Store Management System is a production-ready Flutter mobile application designed for clothing and accessories businesses.
+
+The system enables:
+
+* Inventory Management
+* Product Variant Management
+* Sales Processing
+* Credit Sales Tracking
+* Customer Payment Tracking
+* Employee Management
+* Reporting & Analytics
+* Barcode & QR Scanning
+* PDF Receipt Generation
+* Excel Exporting
+* Offline Operation
+* Cloud Synchronization
+* English & Amharic Support
+
+The application must work seamlessly both online and offline while maintaining data integrity and synchronization between local and cloud databases.
+
+---
+
+# 2. Business Goals
+
+The application should:
+
+* Reduce manual inventory tracking
+* Prevent stock inconsistencies
+* Improve sales management
+* Track customer credit balances
+* Provide business insights through reports
+* Support Ethiopian businesses through bilingual operation
+* Function without internet access
+* Scale from small stores to large retail operations
+
+---
+
+# 3. Technology Stack
+
+## Frontend
+
+* Flutter (Latest Stable Version)
+
+---
+
+## Local Database
+
+* SQLite
+
+Purpose:
+
+* Offline storage
+* Fast local operations
+* Primary working database
+
+---
+
+## Cloud Database
+
+* Firebase Firestore
+
+Purpose:
+
+* Data synchronization
+* Cloud backup
+* Multi-device support
+
+---
+
+## Authentication
+
+* Firebase Authentication
+
+---
+
+## Cloud Storage
+
+* Firebase Storage
+
+Stores:
+
+* Product Images
+* Receipt PDFs
+* Backup Files
+
+---
+
+## Reporting Files
+
+The system automatically maintains:
+
+* Inventory.xlsx
+* Sales.xlsx
+* CreditSales.xlsx
+
+These files serve as reporting/export files only.
+
+SQLite remains the source of truth.
+
+---
+
+# 4. System Architecture
+
+```text
+Flutter UI
+      ↓
+BLoC Layer
+      ↓
+Repository Layer
+      ↓
+SQLite Database
+      ↓
+Synchronization Service
+      ↓
+Firebase Firestore
+```
+
+---
+
+# 5. User Roles
+
+## Owner
+
+Full system access.
+
+Can:
+
+* Manage products
+* Manage inventory
+* Manage employees
+* View dashboard
+* View reports
+* Manage credit sales
+* Generate receipts
+* Export Excel files
+* Backup data
+* Restore backups
+* Manage users
+
+---
+
+## Admin
+
+Can:
+
+* Add products
+* Edit products
+* Delete products
+* Manage inventory
+* View reports
+* Manage credit payments
+* Generate receipts
+* Export Excel files
+
+Cannot:
+
+* Modify Owner accounts
+* Restore backups
+
+---
+
+## Employee
+
+Can:
+
+* Process sales
+* Process credit sales
+* Record payments
+* Scan products
+* Manage inventory
+
+Cannot:
+
+* Manage users
+* Access backup settings
+
+---
+
+# 6. Authentication System
+
+## User Fields
+
+* User ID
+* Full Name
+* Email
+* Password
+* Phone Number
+* Role
+* Date Created
+
+---
+
+## Features
+
+* Secure Login
+* Logout
+* Remember Me
+* Password Reset
+* Role-Based Navigation
+* Session Management
+
+---
+
+# 7. Multi-Language Support
+
+Supported Languages:
+
+### English
+
+Locale:
+
+```text
+en
+```
+
+### Amharic
+
+Locale:
+
+```text
+am
+```
+
+---
+
+## Language Selection
+
+Available:
+
+* First App Launch
+* Login Screen
+* Settings Screen
+
+Language changes must occur instantly without restarting the application.
+
+---
+
+## Localization Files
+
+```text
+lib/l10n/
+├── app_en.arb
+├── app_am.arb
+```
+
+No hardcoded user-facing text is allowed.
+
+---
+
+# 8. Date & Currency Localization
+
+## Currency
+
+Primary Currency:
+
+Ethiopian Birr (ETB)
+
+English:
+
+```text
+ETB 1,500.00
+```
+
+Amharic:
+
+```text
+1,500.00 ብር
+```
+
+---
+
+## Calendar Support
+
+### English
+
+Uses Gregorian Calendar
+
+Example:
+
+```text
+June 24, 2026
+```
+
+### Amharic
+
+Uses Ethiopian Calendar
+
+Example:
+
+```text
+24 ሰኔ 2018
+```
+
+Internally all timestamps must be stored in:
+
+```text
+UTC ISO 8601
+```
+
+---
+
+# 9. Product Management
+
+Each product contains:
+
+* Product ID
+* Product Name
+* SKU
+* Barcode
+* QR Code
+* Category
+* Brand
+* Color
+* Gender
+* Product Image
+* Date Added
+* Last Updated
+
+---
+
+## Gender Values
+
+* Men
+* Women
+* Unisex
+
+---
+
+# 10. Product Variants
+
+Each size maintains its own stock quantity.
+
+Example:
+
+| Product    | Size   | Quantity |
+| ---------- | ------ | -------- |
+| Nike Shirt | Small  | 12       |
+| Nike Shirt | Medium | 8        |
+| Nike Shirt | Large  | 5        |
+
+---
+
+# 11. Inventory Rules
+
+When adding stock:
+
+If:
+
+* Product Name
+* Brand
+* Color
+* Gender
+* Size
+
+match an existing product variant,
+
+then:
+
+Increase quantity instead of creating a duplicate product.
+
+Example:
+
+Before:
+
+```text
+Blue Nike Shirt
+Medium
+Quantity = 12
+```
+
+New Shipment:
+
+```text
+Quantity = 5
+```
+
+After:
+
+```text
+Quantity = 17
+```
+
+---
+
+# 12. Product Images
+
+Users can:
+
+* Capture using Camera
+* Upload from Gallery
+
+Images should:
+
+* Be compressed
+* Stored locally
+* Uploaded to Firebase Storage
+
+---
+
+# 13. Inventory Module
+
+Features:
+
+* Add Product
+* Edit Product
+* Delete Product
+* Search Product
+* Sort Product
+* Filter Product
+
+---
+
+## Filters
+
+* Category
+* Brand
+* Gender
+* Size
+
+---
+
+## Display Fields
+
+* Product Image
+* Product Name
+* SKU
+* Price
+* Quantity
+* Size
+
+---
+
+# 14. Barcode & QR System
+
+Support:
+
+* Barcode Scanning
+* QR Code Scanning
+* Manual Search
+
+Workflow:
+
+1. Scan Code
+2. Retrieve Product
+3. Display Product
+4. Proceed to Sale
+
+---
+
+# 15. Sales Module
+
+## Sale Process
+
+1. Select Product
+2. Select Size
+3. Enter Quantity
+4. Validate Inventory
+5. Complete Sale
+
+---
+
+## Sale Record
+
+Store:
+
+* Sale ID
+* Product
+* Quantity
+* Unit Price
+* Total Amount
+* Employee
+* Customer (Optional)
+* Date
+* Time
+
+---
+
+## Automatic Actions
+
+Upon sale:
+
+* Reduce Inventory
+* Update SQLite
+* Queue Sync
+* Update Sales.xlsx
+
+---
+
+# 16. Credit Sales Module
+
+Stores:
+
+* Credit ID
+* Customer Name
+* Phone Number
+* Products
+* Quantity
+* Total Amount Owed
+* Amount Paid
+* Remaining Balance
+* Due Date
+* Date Created
+* Status
+
+---
+
+## Credit Status
+
+* Pending
+* Partially Paid
+* Fully Paid
+
+---
+
+# 17. Credit Payment Tracking
+
+Each payment contains:
+
+* Payment ID
+* Credit ID
+* Payment Date
+* Amount Paid
+* Employee
+
+---
+
+## Automatic Completion Logic
+
+When Remaining Balance reaches:
+
+```text
+0
+```
+
+System:
+
+1. Marks Fully Paid
+2. Removes from active credit records
+3. Updates Sales.xlsx
+4. Updates Reports
+
+---
+
+# 18. Dashboard
+
+Display:
+
+* Total Products
+* Total Inventory Quantity
+* Recent Sales
+* Recent Inventory Updates
+* Active Credit Customers
+* Outstanding Credit Balance
+* Low Stock Alerts
+
+---
+
+# 19. Reports Module
+
+## Weekly Sales Report
+
+Displays:
+
+* Revenue
+* Transaction Count
+* Top Selling Products
+
+---
+
+## Monthly Sales Report
+
+Displays:
+
+* Revenue
+* Transaction Count
+* Best Selling Products
+
+---
+
+## Credit Report
+
+Displays:
+
+* Customer Name
+* Balance
+* Due Date
+* Status
+
+---
+
+## Export Options
+
+* View in App
+* Export PDF
+* Export Excel
+
+---
+
+# 20. PDF Receipt System
+
+Generated only when requested.
+
+Receipt Contains:
+
+* Store Name
+* Receipt Number
+* Customer Name
+* Employee Name
+* Product List
+* Quantity
+* Unit Price
+* Total Amount
+* Date
+* Time
+
+---
+
+## Receipt Features
+
+* Preview
+* Save
+* Share
+* Print
+
+Language automatically follows selected app language.
+
+---
+
+# 21. Excel Integration
+
+## Inventory.xlsx
+
+Contains:
+
+* Products
+* Variants
+* Quantities
+
+---
+
+## Sales.xlsx
+
+Contains:
+
+* Sales Records
+* Revenue Data
+
+---
+
+## CreditSales.xlsx
+
+Contains:
+
+* Outstanding Credit Accounts
+
+---
+
+Excel files update automatically whenever relevant data changes.
+
+---
+
+# 22. Offline Mode
+
+Without internet:
+
+* Inventory works
+* Sales work
+* Credit works
+* Reports work
+* Receipt generation works
+
+All data is saved locally using SQLite.
+
+---
+
+# 23. Synchronization System
+
+When internet becomes available:
+
+1. Process Sync Queue
+2. Upload SQLite Changes
+3. Download Cloud Changes
+4. Resolve Conflicts
+5. Create Backup
+
+---
+
+## Conflict Resolution
+
+Strategy:
+
+```text
+Latest Updated Timestamp Wins
+```
+
+All conflicts are logged.
+
+---
+
+# 24. Backup & Restore
+
+Owner Only.
+
+Backup Includes:
+
+* Inventory
+* Sales
+* Credit Records
+* Users
+* Settings
+
+---
+
+## Restore Process
+
+1. Select Backup
+2. Validate Backup
+3. Restore Database
+4. Rebuild Sync Queue
+
+---
+
+# 25. Database Design
+
+## SQLite Tables
+
+* users
+* products
+* product_variants
+* sales
+* sale_items
+* credit_sales
+* payments
+* inventory_logs
+* sync_queue
+* settings
+
+---
+
+## Firestore Collections
+
+* users
+* products
+* product_variants
+* sales
+* credit_sales
+* payments
+* inventory_logs
+* backups
+
+---
+
+# 26. Security Requirements
+
+* Firebase Authentication
+* Secure Firestore Rules
+* Secure Storage
+* Encrypted Local Database
+* Role-Based Access Control
+* Input Validation
+* Session Timeout
+* Activity Logging
+
+---
+
+# 27. UI / UX Requirements
+
+Theme:
+
+* Modern Retail Design
+* Clothing Store Aesthetic
+* Professional Dashboard
+* Smooth Animations
+* Rounded Components
+
+---
+
+## Modes
+
+* Light Mode
+* Dark Mode
+
+---
+
+## Navigation
+
+Bottom Navigation:
+
+* Dashboard
+* Inventory
+* Sales
+* Credit
+* Reports
+
+---
+
+Settings Drawer:
+
+* Users
+* Backup
+* Sync Status
+* Language
+* Theme
+* Logout
+
+---
+
+# 28. Application Screens
+
+### Authentication
+
+1. Splash Screen
+2. Language Selection
+3. Login Screen
+4. Forgot Password
+
+### Dashboard
+
+5. Dashboard
+
+### Inventory
+
+6. Product List
+7. Product Details
+8. Add Product
+9. Edit Product
+
+### Sales
+
+10. POS Screen
+11. Cart Screen
+12. Sale Complete Screen
+
+### Credit
+
+13. Credit Sales List
+14. Credit Details
+15. Record Payment
+
+### Reports
+
+16. Weekly Report
+17. Monthly Report
+18. Credit Report
+
+### Administration
+
+19. User Management
+20. Settings
+21. Backup & Restore
+22. Sync Status
+
+### Utilities
+
+23. Barcode Scanner
+24. QR Scanner
+25. Receipt Preview
+
+---
+
+# 29. Future Expansion
+
+The architecture must support future modules without major refactoring:
+
+* Supplier Management
+* Purchase Orders
+* Inventory Transfers
+* Expense Tracking
+* Analytics Dashboard
+* Customer Loyalty Program
+* Product Returns & Exchanges
+* Multi-Store Management
+* VAT & Tax Management
+
+---
+
+# 30. Development Standards
+
+The project must use:
+
+* Clean Architecture
+* BLoC State Management
+* Repository Pattern
+* Dependency Injection
+* SOLID Principles
+* Null Safety
+* Error Handling
+* Input Validation
+* Reusable Components
+* Well-Documented Code
+
+---
+
+# 31. Deliverables
+
+The final implementation must provide:
+
+1. Complete Flutter project structure.
+2. SQLite database schema.
+3. Firestore collection structure.
+4. Firebase Authentication.
+5. Role-based access control.
+6. Inventory management module.
+7. Sales module.
+8. Credit sales module.
+9. Credit payment tracking.
+10. Barcode scanning.
+11. QR code scanning.
+12. Product image management.
+13. PDF receipt generation.
+14. Excel export service.
+15. Cloud synchronization service.
+16. Backup & restore functionality.
+17. English localization.
+18. Amharic localization.
+19. Ethiopian calendar support.
+20. Gregorian calendar support.
+21. Light and dark themes.
+22. Production-ready UI.
+23. Complete source code.
+24. Setup and deployment documentation.
+
+## Success Criteria
+
+The application must be:
+
+* Fully functional offline
+* Automatically synchronized online
+* Bilingual (English & Amharic)
+* Secure
+* Scalable
+* Maintainable
+* Production-ready for real clothing store operations in Ethiopia.

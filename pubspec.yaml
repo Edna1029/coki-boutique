@@ -1,0 +1,66 @@
+name: coki_boutique
+description: "Coki Boutique - Store Management System for Clothing & Accessories Retail"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.3
+  flutter_bloc: ^8.1.3
+  equatable: ^2.0.5
+  sqflite: ^2.3.0
+  path_provider: ^2.1.2
+  path: ^1.9.0
+  firebase_core: ^2.27.0
+  firebase_auth: ^4.17.8
+  cloud_firestore: ^4.15.8
+  firebase_storage: ^11.6.9
+  pdf: ^3.10.8
+  printing: ^5.12.0
+  excel: ^4.0.2
+  fl_chart: ^0.66.2
+  shared_preferences: ^2.2.2
+  uuid: ^4.3.3
+  mobile_scanner: 7.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  sqflite_common_ffi: 2.3.5
+
+flutter:
+  uses-material-design: true
+  generate: true
+  # Add an `assets:` section here when local images/icons are added,
+  # e.g. assets/images/ and assets/icons/ (the folders must exist).
+
+  # Fonts are bundled (not downloaded at runtime) so the app and its PDF
+  # receipts work fully offline (PRD §22). Noto fonts: SIL OFL 1.1, see
+  # assets/fonts/OFL.txt. Bundled font files are also readable via
+  # rootBundle at these paths (used by the PDF receipt service).
+  fonts:
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+    - family: NotoSansEthiopic
+      fonts:
+        - asset: assets/fonts/NotoSansEthiopic-Regular.ttf
+        - asset: assets/fonts/NotoSansEthiopic-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/NotoSansEthiopic-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/NotoSansEthiopic-Bold.ttf
+          weight: 700
