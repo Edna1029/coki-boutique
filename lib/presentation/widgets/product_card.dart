@@ -12,17 +12,22 @@ class ProductCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onAddToCart;
 
+  /// When set, a bin button is shown (used for sold-out products).
+  final VoidCallback? onDelete;
+
   const ProductCard({
     super.key,
     required this.product,
     this.isAmharic = false,
     this.onTap,
     this.onAddToCart,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSoldOut = product.totalStock <= 0;
     final isLowStock = product.totalStock <= 5;
 
     return Container(
@@ -81,7 +86,9 @@ class ProductCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            isAmharic ? 'አነስተኛ' : 'LOW',
+                            isSoldOut
+                                ? (isAmharic ? 'ተሽጦ አልቋል' : 'SOLD OUT')
+                                : (isAmharic ? 'አነስተኛ' : 'LOW'),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 9,
@@ -169,6 +176,18 @@ class ProductCard extends StatelessWidget {
                                 child: const Icon(Icons.add_shopping_cart, size: 14, color: Colors.white),
                               ),
                             ),
+                          if (onDelete != null)
+                            Tooltip(
+                              message: isAmharic ? 'ሰርዝ' : 'Delete',
+                              child: InkWell(
+                                onTap: onDelete,
+                                borderRadius: BorderRadius.circular(8),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(6),
+                                  child: Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -188,11 +207,15 @@ class ProductListRow extends StatelessWidget {
   final bool isAmharic;
   final VoidCallback? onTap;
 
+  /// When set, a bin button is shown (used for sold-out products).
+  final VoidCallback? onDelete;
+
   const ProductListRow({
     super.key,
     required this.product,
     this.isAmharic = false,
     this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -227,13 +250,24 @@ class ProductListRow extends StatelessWidget {
             color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
           ),
         ),
-        trailing: Text(
-          CurrencyFormatter.format(product.price, isAmharic: isAmharic),
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: AppColors.primaryGreen,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              CurrencyFormatter.format(product.price, isAmharic: isAmharic),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppColors.primaryGreen,
+              ),
+            ),
+            if (onDelete != null)
+              IconButton(
+                tooltip: isAmharic ? 'ሰርዝ' : 'Delete',
+                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                onPressed: onDelete,
+              ),
+          ],
         ),
       ),
     );

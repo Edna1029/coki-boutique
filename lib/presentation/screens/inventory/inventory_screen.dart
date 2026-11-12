@@ -94,7 +94,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
                   _showAddEditProductDialog(product);
                 }
               : null,
-          onDelete: canEdit ? () => _confirmDeleteProduct(detailsCtx, product) : null,
+          onDelete: canEdit ? () => _confirmDeleteProduct(detailsCtx, product, closePage: true) : null,
         ),
       ),
     );
@@ -103,9 +103,21 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
   /// Owner/admin only. Removes the product and its sizes on this device and,
   /// through sync, on every other device. Past sales, receipts and credit
   /// records keep their own copy of the product name, so history is intact.
-  Future<void> _confirmDeleteProduct(BuildContext detailsCtx, ProductModel product) async {
+  ///
+  /// Called from the details page ([closePage] true: that page is closed
+  /// after deleting) and from the bin shown on sold-out products in the list.
+  /// Not allowed while a customer still owes money for the product.
+  Future<void> _confirmDeleteProduct(BuildContext detailsCtx, ProductModel product, {bool closePage = false}) async {
     final am = widget.isAmharic;
     final units = product.totalStock;
+
+    final owing = await _sqliteService.unpaidCreditCustomersFor(product.productId);
+    if (!detailsCtx.mounted) return;
+    if (owing.isNotEmpty) {
+      await _showOnCreditDialog(detailsCtx, product, owing);
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: detailsCtx,
       builder: (ctx) => AlertDialog(
@@ -137,17 +149,54 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
     final messenger = ScaffoldMessenger.of(context);
     try {
       await _sqliteService.deleteProduct(product.productId);
-      if (detailsCtx.mounted) Navigator.of(detailsCtx).pop();
+      if (closePage && detailsCtx.mounted) Navigator.of(detailsCtx).pop();
       await _loadProducts();
       messenger.showSnackBar(SnackBar(
         content: Text(am ? '"${product.productName}" ተሰርዟል' : '"${product.productName}" deleted'),
       ));
+    } on ProductOnCreditException catch (e) {
+      // A credit sale was recorded between the check above and the delete.
+      if (detailsCtx.mounted) await _showOnCreditDialog(detailsCtx, product, e.customers);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         backgroundColor: AppColors.error,
         content: Text(am ? 'መሰረዝ አልተሳካም: $e' : 'Could not delete: $e'),
       ));
     }
+  }
+
+  /// The bin shown on a SOLD-OUT product in the list (owner/admin only), so
+  /// finished items can be cleared without opening each one. Null = no bin.
+  VoidCallback? _soldOutDelete(ProductModel p) {
+    final canEdit = widget.userRole != UserRole.employee;
+    if (!canEdit || p.totalStock > 0) return null;
+    return () => _confirmDeleteProduct(context, p);
+  }
+
+  /// Explains why a product can't be deleted yet: it was sold on credit and
+  /// these customers have not finished paying.
+  Future<void> _showOnCreditDialog(BuildContext ctx, ProductModel product, List<String> customers) {
+    final am = widget.isAmharic;
+    final names = customers.join(am ? '፣ ' : ', ');
+    return showDialog<void>(
+      context: ctx,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(am ? 'አሁን መሰረዝ አይቻልም' : "Can't delete yet"),
+        content: Text(
+          am
+              ? '"${product.productName}" በብድር ተሽጧል፣ ክፍያውም አልተጠናቀቀም ($names)።'
+                  '\n\nብድሩ ሙሉ በሙሉ ከተከፈለ በኋላ መሰረዝ ይችላሉ።'
+              : '"${product.productName}" was sold on credit and is not fully paid yet ($names).'
+                  '\n\nYou can delete it once the credit is fully paid.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: Text(am ? 'እሺ' : 'OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddEditProductDialog([ProductModel? productToEdit]) {
@@ -577,6 +626,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
                                 product: p,
                                 isAmharic: widget.isAmharic,
                                 onTap: () => _openProductDetails(p),
+                                onDelete: _soldOutDelete(p),
                               );
                             },
                           )
@@ -588,6 +638,7 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
                                 product: p,
                                 isAmharic: widget.isAmharic,
                                 onTap: () => _openProductDetails(p),
+                                onDelete: _soldOutDelete(p),
                               );
                             },
                           ),

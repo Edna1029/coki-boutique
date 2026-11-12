@@ -228,4 +228,46 @@ void main() {
       await dir.delete(recursive: true);
     }
   });
+
+  group('deleting a product that was sold on credit', () {
+    test('is refused while the customer still owes money, and nothing is removed', () async {
+      final p = await addTestProduct(db, price: 1000, sizes: {'M': 1});
+      await sellOnCredit([line(p, 'M', 1)], deposit: 400, name: 'Dawit'); // sold out, 600 owed
+
+      expect(await db.unpaidCreditCustomersFor(p.productId), ['Dawit']);
+      await expectLater(
+        db.deleteProduct(p.productId),
+        throwsA(isA<ProductOnCreditException>().having((e) => e.customers, 'customers', ['Dawit'])),
+      );
+      expect(await db.getProductById(p.productId), isNotNull, reason: 'product must still be there');
+    });
+
+    test('is allowed once the credit is fully paid', () async {
+      final p = await addTestProduct(db, price: 1000, sizes: {'M': 1});
+      final r = await sellOnCredit([line(p, 'M', 1)], deposit: 400);
+      await db.recordCreditPayment(
+          creditId: r.credit.creditId, paymentAmount: 600, employeeId: 'tester', employeeName: 'Tester');
+
+      expect(await db.unpaidCreditCustomersFor(p.productId), isEmpty);
+      await db.deleteProduct(p.productId);
+      expect(await db.getProductById(p.productId), isNull);
+    });
+
+    test('a sold-out product sold for cash can be deleted', () async {
+      final p = await addTestProduct(db, sizes: {'M': 1});
+      await sell(db, [line(p, 'M', 1)]);
+      await db.deleteProduct(p.productId);
+      expect(await db.getProductById(p.productId), isNull);
+    });
+
+    test('an unpaid credit for ANOTHER product does not block the delete', () async {
+      final a = await addTestProduct(db, sizes: {'M': 1});
+      final b = await addTestProduct(db, name: 'Other', barcode: '2000000000015', sizes: {'M': 1});
+      await sellOnCredit([line(b, 'M', 1)]);
+      await sell(db, [line(a, 'M', 1)]);
+      await db.deleteProduct(a.productId);
+      expect(await db.getProductById(a.productId), isNull);
+      expect(await db.getProductById(b.productId), isNotNull);
+    });
+  });
 }

@@ -110,8 +110,8 @@ class _LoginScreenState extends State<LoginScreen> {
       await _authService.sendPasswordReset(email);
       if (mounted) {
         setState(() => _infoMessage = _isAmharic
-            ? 'የይለፍ ቃል መቀየሪያ ሊንክ ወደ $email ተልኳል።'
-            : 'A password reset link was sent to $email.');
+            ? 'ለ $email መለያ ካለ፣ የይለፍ ቃል መቀየሪያ ሊንክ በኢሜይል ተልኳል። ኢሜይልዎን (Spam ጭምር) ይመልከቱ፣ ሊንኩን ከፍተው አዲስ የይለፍ ቃል ያስገቡ፣ ከዚያ እዚህ ይግቡ።'
+            : 'If $email has an account, a reset link was emailed to it. Check your inbox (and Spam), open the link, choose a new password, then sign in here.');
       }
     } on AuthException catch (e) {
       if (mounted) setState(() => _errorMessage = _failureMessage(e.reason));

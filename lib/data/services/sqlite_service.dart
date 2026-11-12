@@ -32,6 +32,17 @@ class InsufficientStockException implements Exception {
       'Not enough stock for $productName (size $size): requested $requested, only $available left';
 }
 
+/// Thrown by [SQLiteService.deleteProduct] when the product was sold on
+/// credit and at least one of those customers has not finished paying.
+class ProductOnCreditException implements Exception {
+  /// The customers who still owe money for this product.
+  final List<String> customers;
+  const ProductOnCreditException(this.customers);
+
+  @override
+  String toString() => 'Product is on unpaid credit for: ${customers.join(', ')}';
+}
+
 /// Why a credit payment / down payment was rejected. The UI maps these to
 /// translated messages; nothing is written when one is thrown.
 enum PaymentRejection { notPositive, exceedsBalance, alreadyPaid, depositExceedsTotal }
@@ -411,9 +422,30 @@ class SQLiteService {
     });
   }
 
+  /// Names of customers who took [productId] on credit and still owe money
+  /// for that sale (empty when none). Credit accounts are linked to their
+  /// POS sale by `sale_id`; fully paid accounts don't count.
+  Future<List<String>> unpaidCreditCustomersFor(String productId, {DatabaseExecutor? executor}) async {
+    final db = executor ?? await _db;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT c.customer_name FROM ${DatabaseTables.tableCreditSales} c '
+      'JOIN ${DatabaseTables.tableSaleItems} si ON si.sale_id = c.sale_id '
+      'WHERE si.product_id = ? AND c.remaining_balance > ? '
+      'ORDER BY c.customer_name',
+      [productId, _moneyEpsilon],
+    );
+    return [for (final r in rows) r['customer_name'] as String];
+  }
+
+  /// Deletes a product and its sizes (here and, through sync, everywhere).
+  /// Refused with [ProductOnCreditException] while a customer still owes
+  /// money for it — the shop needs the product until that credit is settled.
   Future<void> deleteProduct(String productId) async {
     final db = await _db;
     await db.transaction((txn) async {
+      final owing = await unpaidCreditCustomersFor(productId, executor: txn);
+      if (owing.isNotEmpty) throw ProductOnCreditException(owing);
+
       final variants = await txn.query(
         DatabaseTables.tableProductVariants,
         columns: ['variant_id'],
