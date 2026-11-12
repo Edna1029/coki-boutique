@@ -2,13 +2,41 @@ import 'package:coki_boutique/core/utils/barcode_generator.dart';
 import 'package:coki_boutique/data/models/product_model.dart';
 import 'package:coki_boutique/data/models/product_variant_model.dart';
 import 'package:coki_boutique/data/models/sale_model.dart';
+import 'package:coki_boutique/data/services/excel_export_service.dart';
 import 'package:coki_boutique/data/services/firebase_auth_service.dart';
+import 'package:coki_boutique/data/sync/sync_service.dart';
 import 'package:coki_boutique/domain/entities/enums.dart';
 import 'package:coki_boutique/domain/reports/sales_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Pure logic: login rules, barcodes, reports. No database or network.
 void main() {
+  group('offline access limit (P5)', () {
+    final now = DateTime.utc(2026, 11, 20, 12);
+    bool valid(UserRole role, DateTime? verified) =>
+        FirebaseAuthService.cachedAccessStillValid(role: role, lastVerified: verified, now: now);
+
+    test('staff may work offline up to 7 days after the last server check', () {
+      expect(valid(UserRole.employee, now.subtract(const Duration(days: 1))), isTrue);
+      expect(valid(UserRole.employee, now.subtract(const Duration(days: 7))), isTrue);
+      expect(valid(UserRole.admin, now.subtract(const Duration(days: 6, hours: 23))), isTrue);
+    });
+
+    test('after 7 days offline staff must go online once', () {
+      expect(valid(UserRole.employee, now.subtract(const Duration(days: 7, minutes: 1))), isFalse);
+      expect(valid(UserRole.admin, now.subtract(const Duration(days: 30))), isFalse);
+    });
+
+    test('a device copy that was never confirmed is not trusted', () {
+      expect(valid(UserRole.employee, null), isFalse);
+    });
+
+    test('the owner is never locked out of their own shop', () {
+      expect(valid(UserRole.owner, now.subtract(const Duration(days: 365))), isTrue);
+      expect(valid(UserRole.owner, null), isTrue);
+    });
+  });
+
   group('login / roles', () {
     test('only owners and admins may see shop finances (reports, export, revenue)', () {
       expect(UserRole.owner.canViewFinancials, isTrue);
@@ -153,6 +181,49 @@ void main() {
       expect(r.averageSale, 0);
       expect(r.changePercent, isNull);
       expect(r.topProducts, isEmpty);
+    });
+  });
+
+  ProductModel productWith(Map<String, int> sizes) => ProductModel.fromMap(
+        const {'product_id': 'p1', 'product_name': 'Shirt'},
+        variants: [
+          for (final e in sizes.entries)
+            ProductVariantModel(variantId: 'v-${e.key}', productId: 'p1', size: e.key, quantity: e.value, lastUpdated: ''),
+        ],
+      );
+
+  group('oversold stock (R5)', () {
+    test('a size below zero counts as 0 on the shelf and is reported as oversold', () {
+      final p = productWith({'S': 3, 'M': -1});
+      expect(p.totalStock, 3, reason: 'the −1 must not hide the 3 in S');
+      expect(p.oversoldUnits, 1);
+    });
+
+    test('normal stock is not oversold', () {
+      final p = productWith({'S': 3, 'M': 0});
+      expect(p.totalStock, 3);
+      expect(p.oversoldUnits, 0);
+    });
+  });
+
+  group('Excel inventory size columns (R7)', () {
+    test('every size in the shop gets a column, in shop order, once', () {
+      final sizes = ExcelExportService.inventorySizeColumns([
+        productWith({'XXXL': 1, 'M': 2}),
+        productWith({'xs': 1, 'm': 4, '42': 2}),
+      ]);
+      expect(sizes, ['XS', 'M', 'XXXL', '42']);
+    });
+  });
+
+  group('stuck sync warning (R4)', () {
+    test('being offline is never "stuck", however long', () {
+      expect(SyncService.isStuck(failuresSoFar: 50, offline: true), isFalse);
+    });
+
+    test('a real error warns only after repeated failures', () {
+      expect(SyncService.isStuck(failuresSoFar: SyncService.stuckAfterFailures - 1, offline: false), isFalse);
+      expect(SyncService.isStuck(failuresSoFar: SyncService.stuckAfterFailures, offline: false), isTrue);
     });
   });
 }

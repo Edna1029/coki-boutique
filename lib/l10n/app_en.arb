@@ -65,7 +65,7 @@
   "cart": "Shopping Cart",
   "emptyCart": "Cart is empty. Select items to begin sale.",
   "subtotal": "Subtotal",
-  "tax": "Tax (VAT 15%)",
+  "tax": "Tax",
   "total": "Total Amount",
   "completeSale": "Complete Sale",
   "customerName": "Customer Name",

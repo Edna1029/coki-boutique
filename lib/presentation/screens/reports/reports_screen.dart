@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../widgets/sync_refresh_mixin.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimensions.dart';
@@ -73,24 +74,26 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
     }
   }
 
-  Future<void> _exportExcel() async {
-    try {
-      await ExcelExportService.exportInventoryExcel(_products);
-      await ExcelExportService.exportSalesExcel(_sales);
-      await ExcelExportService.exportCreditSalesExcel(_credits);
+  bool _exporting = false;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _am
-                  ? 'የExcel ፋይሎች በተሳካ ሁኔታ ተፈጥረዋል (Inventory.xlsx, Sales.xlsx, CreditSales.xlsx)'
-                  : 'Excel files exported successfully (Inventory.xlsx, Sales.xlsx, CreditSales.xlsx)',
-            ),
-            backgroundColor: AppColors.primaryGreen,
-          ),
-        );
-      }
+  /// Builds the three Excel files and opens the phone's share sheet, so the
+  /// owner can send them (Telegram, email, Drive…) or save them to Files.
+  /// The app's own folder is private on Android — without sharing, the files
+  /// could never be opened.
+  Future<void> _exportExcel() async {
+    if (_exporting) return;
+    _exporting = true;
+    try {
+      final files = [
+        await ExcelExportService.exportInventoryExcel(_products),
+        await ExcelExportService.exportSalesExcel(_sales),
+        await ExcelExportService.exportCreditSalesExcel(_credits),
+      ];
+      const xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      await Share.shareXFiles(
+        [for (final f in files) XFile(f.path, mimeType: xlsx)],
+        subject: _am ? 'ኮኪ ቡቲክ ሪፖርቶች' : 'Coki Boutique reports',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,6 +103,8 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
           ),
         );
       }
+    } finally {
+      _exporting = false;
     }
   }
 

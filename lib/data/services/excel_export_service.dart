@@ -2,16 +2,33 @@ import 'dart:io';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/product_model.dart';
+import '../models/product_variant_model.dart';
 import '../models/sale_model.dart';
 import '../models/credit_sale_model.dart';
 import '../../core/utils/date_formatter.dart';
 
 class ExcelExportService {
+  /// Every size found in [products] (upper-cased, no duplicates), in shop
+  /// order: XS…XXXL first, anything else after, alphabetically.
+  static List<String> inventorySizeColumns(List<ProductModel> products) {
+    final seen = <String, ProductVariantModel>{};
+    for (final p in products) {
+      for (final v in p.variants) {
+        seen.putIfAbsent(v.size.toUpperCase(), () => v);
+      }
+    }
+    return ProductModel.sortedBySize(seen.values.toList()).map((v) => v.size.toUpperCase()).toList();
+  }
+
   /// Generates Inventory.xlsx
   static Future<File> exportInventoryExcel(List<ProductModel> products) async {
     final excel = Excel.createExcel();
     final Sheet sheet = excel['Inventory'];
     excel.delete('Sheet1');
+
+    // One column per size that actually exists in the shop (XS, XXXL, shoe
+    // sizes…), in shop order — not a fixed S–XXL list.
+    final sizes = inventorySizeColumns(products);
 
     // Header Row
     sheet.appendRow([
@@ -23,11 +40,7 @@ class ExcelExportService {
       TextCellValue('Color'),
       TextCellValue('Gender'),
       TextCellValue('Price (ETB)'),
-      TextCellValue('Size S'),
-      TextCellValue('Size M'),
-      TextCellValue('Size L'),
-      TextCellValue('Size XL'),
-      TextCellValue('Size XXL'),
+      for (final s in sizes) TextCellValue('Size $s'),
       TextCellValue('Total Stock'),
       TextCellValue('Last Updated'),
     ]);
@@ -42,11 +55,7 @@ class ExcelExportService {
         TextCellValue(p.color),
         TextCellValue(p.gender.name.toUpperCase()),
         DoubleCellValue(p.price),
-        IntCellValue(p.stockForSize('S')),
-        IntCellValue(p.stockForSize('M')),
-        IntCellValue(p.stockForSize('L')),
-        IntCellValue(p.stockForSize('XL')),
-        IntCellValue(p.stockForSize('XXL')),
+        for (final s in sizes) IntCellValue(p.stockForSize(s)),
         IntCellValue(p.totalStock),
         TextCellValue(DateFormatter.formatIsoDate(p.lastUpdated)),
       ]);

@@ -204,7 +204,7 @@ class AppLocalizationsAm extends AppLocalizations {
   String get subtotal => 'የእቃዎች ድምር';
 
   @override
-  String get tax => 'ተጨማሪ እሴት ታክስ (15%)';
+  String get tax => 'ታክስ';
 
   @override
   String get total => 'አጠቃላይ ድምር';

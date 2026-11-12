@@ -21,12 +21,18 @@ class SyncStatus {
   final DateTime? lastSuccess;
   final String? lastError;
 
+  /// True when the same change has failed to upload several times for a
+  /// reason that is NOT "no internet" (e.g. permission denied). Everything
+  /// queued behind it is waiting too, so the screen must say so.
+  final bool stuck;
+
   const SyncStatus({
     this.pending = 0,
     this.online = false,
     this.syncing = false,
     this.lastSuccess,
     this.lastError,
+    this.stuck = false,
   });
 
   SyncStatus copyWith({
@@ -35,6 +41,7 @@ class SyncStatus {
     bool? syncing,
     DateTime? lastSuccess,
     String? lastError,
+    bool? stuck,
     bool clearError = false,
   }) =>
       SyncStatus(
@@ -43,6 +50,7 @@ class SyncStatus {
         syncing: syncing ?? this.syncing,
         lastSuccess: lastSuccess ?? this.lastSuccess,
         lastError: clearError ? null : (lastError ?? this.lastError),
+        stuck: clearError ? false : (stuck ?? this.stuck),
       );
 }
 
@@ -169,13 +177,26 @@ class SyncService {
     }
     for (final item in items) {
       try {
-        await _upload(item).timeout(const Duration(seconds: 25));
+        final cloudWinner = await _upload(item).timeout(const Duration(seconds: 25));
         await _local.markSyncItemCompleted(item.queueId);
+        if (cloudWinner != null) {
+          // Our edit lost to a newer one from another device. Take the cloud
+          // copy now, or this device would keep showing its own old edit.
+          final db = await DatabaseHelper.instance.database;
+          final r = await db.transaction(
+              (txn) => RemoteApply.apply(txn, item.tableName, item.recordId, cloudWinner));
+          if (r == ApplyResult.applied) dataVersion.value++;
+        }
       } catch (e) {
         // Keep order: stop at the first failure and retry later (offline,
         // permission, timeout…). Safe to retry — see class doc.
         await _local.markSyncItemFailed(item.queueId);
-        status.value = status.value.copyWith(lastError: e.toString(), online: _isOffline(e) ? false : null);
+        final offline = _isOffline(e);
+        status.value = status.value.copyWith(
+          lastError: e.toString(),
+          online: offline ? false : null,
+          stuck: isStuck(failuresSoFar: item.retryCount + 1, offline: offline),
+        );
         debugPrint('Sync upload paused at ${item.tableName}/${item.recordId}: $e');
         return;
       }
@@ -183,15 +204,29 @@ class SyncService {
     status.value = status.value.copyWith(lastSuccess: DateTime.now(), clearError: true, online: true);
   }
 
+  /// Failures of one change before the Settings screen warns about it.
+  static const stuckAfterFailures = 5;
+
+  /// A change counts as stuck once it has failed [stuckAfterFailures] times
+  /// for a reason other than being offline (offline just means "wait").
+  @visibleForTesting
+  static bool isStuck({required int failuresSoFar, required bool offline}) =>
+      !offline && failuresSoFar >= stuckAfterFailures;
+
   bool _isOffline(Object e) =>
       e is TimeoutException || (e is FirebaseException && (e.code == 'unavailable' || e.code == 'deadline-exceeded'));
 
-  Future<void> _upload(SyncQueueItem item) {
+  /// Uploads one queue entry. Returns the cloud document when an `update`
+  /// was dropped because the cloud copy is newer (the caller then applies
+  /// that copy locally); otherwise null.
+  Future<Map<String, dynamic>?> _upload(SyncQueueItem item) async {
     final data = jsonDecode(item.payload) as Map<String, dynamic>;
     final ref = _fs.collection(item.tableName).doc(item.recordId);
     final stamp = {'server_updated_at': FieldValue.serverTimestamp()};
+    Map<String, dynamic>? cloudWinner;
 
-    return _fs.runTransaction((tx) async {
+    await _fs.runTransaction((tx) async {
+      cloudWinner = null; // Firestore may run this body more than once
       switch (item.operation) {
         case SyncOperation.insert:
           tx.set(ref, {...data, ...stamp, 'deleted': false}, SetOptions(merge: true));
@@ -208,6 +243,7 @@ class SyncService {
           if (cloudTime != null && ourTime != null && cloudTime.isAfter(ourTime)) {
             // Conflict: another device changed it later — theirs wins (PRD §23).
             debugPrint('Sync conflict on ${item.tableName}/${item.recordId}: cloud is newer, local edit dropped');
+            cloudWinner = snap.data();
             return;
           }
           tx.set(ref, {...data, ...stamp}, SetOptions(merge: true));
@@ -233,6 +269,7 @@ class SyncService {
           break;
       }
     });
+    return cloudWinner;
   }
 
   // ---------------------------------------------------------------------------

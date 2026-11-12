@@ -148,21 +148,25 @@ class PdfReceiptService {
 
               pw.Divider(thickness: 1, borderStyle: pw.BorderStyle.dashed),
 
-              // Totals
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(isAmharic ? 'ንዑስ ድምር:' : 'Subtotal:', style: pw.TextStyle(font: font, fontSize: 8)),
-                  pw.Text(CurrencyFormatter.format(sale.subtotal, isAmharic: isAmharic), style: pw.TextStyle(font: font, fontSize: 8)),
-                ],
-              ),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(isAmharic ? 'ታክስ (15%):' : 'Tax (15%):', style: pw.TextStyle(font: font, fontSize: 8)),
-                  pw.Text(CurrencyFormatter.format(sale.taxAmount, isAmharic: isAmharic), style: pw.TextStyle(font: font, fontSize: 8)),
-                ],
-              ),
+              // Totals. Shelf prices are final (no VAT is added at the till),
+              // so a receipt normally shows the total only. Subtotal + tax
+              // lines appear just for old sales that were recorded with tax.
+              if (sale.taxAmount > 0) ...[
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(isAmharic ? 'ንዑስ ድምር:' : 'Subtotal:', style: pw.TextStyle(font: font, fontSize: 8)),
+                    pw.Text(CurrencyFormatter.format(sale.subtotal, isAmharic: isAmharic), style: pw.TextStyle(font: font, fontSize: 8)),
+                  ],
+                ),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(isAmharic ? 'ታክስ:' : 'Tax:', style: pw.TextStyle(font: font, fontSize: 8)),
+                    pw.Text(CurrencyFormatter.format(sale.taxAmount, isAmharic: isAmharic), style: pw.TextStyle(font: font, fontSize: 8)),
+                  ],
+                ),
+              ],
               pw.SizedBox(height: 4),
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

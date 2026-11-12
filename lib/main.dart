@@ -137,6 +137,9 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   late final Future<UserModel?> _session = _restore();
 
+  /// Why the saved session was not restored, shown on the login screen.
+  AuthFailure? _restoreFailure;
+
   Future<UserModel?> _restore() async {
     final auth = FirebaseAuthService();
     try {
@@ -146,6 +149,9 @@ class _AuthGateState extends State<AuthGate> {
         return null;
       }
       return await auth.restoreSession();
+    } on AuthException catch (e) {
+      _restoreFailure = e.reason; // e.g. access removed / offline too long
+      return null;
     } catch (e) {
       debugPrint('Session restore failed: $e');
       return null;
@@ -173,6 +179,7 @@ class _AuthGateState extends State<AuthGate> {
         return LoginScreen(
           onLanguageChanged: widget.onLanguageChanged,
           onThemeChanged: widget.onThemeChanged,
+          initialFailure: _restoreFailure,
         );
       },
     );

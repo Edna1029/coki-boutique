@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @tax.
   ///
   /// In en, this message translates to:
-  /// **'Tax (VAT 15%)'**
+  /// **'Tax'**
   String get tax;
 
   /// No description provided for @total.

@@ -72,6 +72,37 @@ void main() {
       expect(stock['delta'], 3);
     });
 
+    test('correcting stock in Edit uploads the difference, not the new total (R3)', () async {
+      final p = await addTestProduct(db, sizes: {'M': 5});
+      final before = (await queue()).length;
+      await db.updateProduct(
+        productId: p.productId, name: p.productName, sku: '', category: p.category, brand: p.brand,
+        color: p.color, gender: p.gender, price: p.price, image: '', sizeQuantities: const {'M': 3},
+      );
+      final stock = (await queue())
+          .skip(before)
+          .where((e) => e['table'] == DatabaseTables.tableProductVariants)
+          .single;
+      expect(stock['op'], SyncOperation.increment);
+      expect(stock['delta'], -2, reason: '5 → 3 is a change of −2');
+    });
+
+    test('a stock correction does not erase a sale made on another device (R3)', () async {
+      final p = await addTestProduct(db, sizes: {'M': 5});
+      final v = p.variants.single;
+      await markAllUploaded();
+      // We count the shelf and correct 5 → 3 (not uploaded yet)…
+      await db.updateProduct(
+        productId: p.productId, name: p.productName, sku: '', category: p.category, brand: p.brand,
+        color: p.color, gender: p.gender, price: p.price, image: '', sizeQuantities: const {'M': 3},
+      );
+      // …while another device sold 1, so the cloud says 4.
+      await applyCloud('product_variants', v.variantId,
+          {'variant_id': v.variantId, 'product_id': p.productId, 'size': 'M', 'quantity': 4, 'last_updated': 'x'});
+      // 5 − 1 (their sale) − 2 (our correction) = 2.
+      expect((await db.getProductById(p.productId))!.stockForSize('M'), 2);
+    });
+
     test('a new credit with a deposit uploads the credit AND the deposit payment', () async {
       await db.createCreditSale(
         customerName: 'A', phoneNumber: '1', productsDescription: 'x', totalQuantity: 1,

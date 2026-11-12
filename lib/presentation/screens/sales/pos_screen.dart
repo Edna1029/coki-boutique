@@ -202,8 +202,10 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
   }
 
   double get _subtotal => _cart.fold(0.0, (sum, c) => sum + c.total);
-  double get _tax => _subtotal * 0.15;
-  double get _total => _subtotal + _tax;
+  /// Shelf prices are the final prices: no VAT is added at the till
+  /// (owner's decision, 2026-11-12). Sales are stored with tax 0.
+  double get _tax => 0;
+  double get _total => _subtotal;
 
   List<SaleItemModel> _cartAsSaleItems() {
     return _cart.map((entry) {
@@ -236,13 +238,18 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
     _loadProducts();
   }
 
+  /// True while a sale is being written. A second tap on "Complete Sale"
+  /// during that time must not record the same cart again.
+  bool _savingSale = false;
+
   Future<void> _completeSale() async {
-    if (_cart.isEmpty) return;
+    if (_cart.isEmpty || _savingSale) return;
     if (_paymentMethod == 'credit') {
       _showCreditDetailsDialog();
       return;
     }
 
+    _updateCart(() => _savingSale = true);
     try {
       final sale = await _sqliteService.processSale(
         items: _cartAsSaleItems(),
@@ -273,6 +280,8 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
           ),
         );
       }
+    } finally {
+      if (mounted) _updateCart(() => _savingSale = false);
     }
   }
 
@@ -956,22 +965,6 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(l10n.subtotal, style: const TextStyle(fontSize: 13)),
-              Text(CurrencyFormatter.format(_subtotal, isAmharic: widget.isAmharic), style: const TextStyle(fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(l10n.tax, style: const TextStyle(fontSize: 13)),
-              Text(CurrencyFormatter.format(_tax, isAmharic: widget.isAmharic), style: const TextStyle(fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
               Text(l10n.total, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               Text(
                 CurrencyFormatter.format(_total, isAmharic: widget.isAmharic),
@@ -1011,7 +1004,7 @@ class _PosScreenState extends State<PosScreen> with SyncRefreshMixin {
 
           // Complete Sale Button (Emerald Green per spec)
           ElevatedButton(
-            onPressed: _cart.isEmpty ? null : _completeSale,
+            onPressed: _cart.isEmpty || _savingSale ? null : _completeSale,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryGreen,
               padding: const EdgeInsets.symmetric(vertical: 16),

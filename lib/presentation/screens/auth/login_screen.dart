@@ -12,10 +12,14 @@ class LoginScreen extends StatefulWidget {
   final Function(Locale) onLanguageChanged;
   final Function(bool) onThemeChanged;
 
+  /// Why the user was sent back here (e.g. access removed); shown on open.
+  final AuthFailure? initialFailure;
+
   const LoginScreen({
     super.key,
     required this.onLanguageChanged,
     required this.onThemeChanged,
+    this.initialFailure,
   });
 
   @override
@@ -34,6 +38,19 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _infoMessage;
 
   bool get _isAmharic => Localizations.localeOf(context).languageCode == 'am';
+
+  bool _shownInitialFailure = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Needs the locale, so it can't run in initState.
+    final reason = widget.initialFailure;
+    if (!_shownInitialFailure && reason != null) {
+      _shownInitialFailure = true;
+      _errorMessage = _failureMessage(reason);
+    }
+  }
 
   String _failureMessage(AuthFailure reason) {
     final am = _isAmharic;
@@ -54,8 +71,20 @@ class _LoginScreenState extends State<LoginScreen> {
             : 'Too many attempts. Please wait a moment and try again.';
       case AuthFailure.network:
         return am
-            ? 'ኢንተርኔት የለም። ለመጀመሪያ ጊዜ ለመግባት ኢንተርኔት ያስፈልጋል።'
-            : 'No internet connection. The first sign-in on a device needs internet.';
+            ? 'ኢንተርኔት የለም። ለመግባት ኢንተርኔት ያስፈልጋል።'
+            : 'No internet connection. Signing in needs internet.';
+      case AuthFailure.accessRemoved:
+        return am
+            ? 'የዚህ መለያ ፈቃድ በባለቤቱ ተነስቷል። ባለቤቱን ያነጋግሩ።'
+            : "The store owner removed this account's access. Contact the owner if this is a mistake.";
+      case AuthFailure.roleChanged:
+        return am
+            ? 'የእርስዎ ሚና ተቀይሯል። እባክዎ እንደገና ይግቡ።'
+            : 'Your role was changed. Please sign in again.';
+      case AuthFailure.offlineTooLong:
+        return am
+            ? 'ከ7 ቀን በላይ ያለ ኢንተርኔት ቆይቷል። መለያዎን ለማረጋገጥ ከኢንተርኔት ጋር ይገናኙና አፑን እንደገና ይክፈቱ።'
+            : 'This phone has been offline for more than 7 days. Connect to the internet and reopen the app so your account can be checked.';
       case AuthFailure.unknown:
         return am ? 'መግባት አልተቻለም። እንደገና ይሞክሩ።' : 'Sign-in failed. Please try again.';
     }

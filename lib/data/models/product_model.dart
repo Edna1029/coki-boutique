@@ -34,7 +34,14 @@ class ProductModel {
     this.variants = const [],
   });
 
-  int get totalStock => variants.fold(0, (sum, v) => sum + v.quantity);
+  /// Units on the shelf. A size can go below zero when two offline devices
+  /// both sold its last unit; that counts as 0 here (see [oversoldUnits]),
+  /// so it doesn't hide stock of the other sizes.
+  int get totalStock => variants.fold(0, (sum, v) => sum + (v.quantity > 0 ? v.quantity : 0));
+
+  /// How many units were sold beyond what was in stock (0 normally).
+  /// When above 0 the shelf must be recounted and the stock corrected.
+  int get oversoldUnits => variants.fold(0, (sum, v) => sum + (v.quantity < 0 ? -v.quantity : 0));
 
   int stockForSize(String size) {
     final v = variants.firstWhere(

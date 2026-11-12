@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../widgets/role_badge.dart';
 import '../../../core/constants/app_dimensions.dart';
@@ -48,19 +49,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleBackup() async {
     try {
       final file = await BackupRestoreService.createBackup();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              Localizations.localeOf(context).languageCode == 'am'
-                  ? 'ምትኬ በተሳካ ሁኔታ ተፈጥሯል: ${file.path.split("/").last}'
-                  : 'Backup created: ${file.path.split("/").last}',
-            ),
-            backgroundColor: AppColors.primaryGreen,
-          ),
-        );
-      }
+      // The app's folder is private on Android: hand the file to the share
+      // sheet so the owner can keep it somewhere else (Drive, email, Files).
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/json')],
+        subject: 'Coki Boutique backup',
+      );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(Localizations.localeOf(context).languageCode == 'am'
@@ -208,7 +204,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: s.online ? AppColors.primaryGreen : AppColors.creditPending,
                     ),
                     title: Text(l10n.syncStatus),
-                    subtitle: Text(_syncSummary(s, isAmharic), style: const TextStyle(fontSize: 11)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_syncSummary(s, isAmharic), style: const TextStyle(fontSize: 11)),
+                        if (s.stuck)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              isAmharic
+                                  ? 'ማመሳሰል ተጣብቋል፦ ለውጦች ወደ ደመና መላክ አልተቻለም። ይህንን ለባለቤቱ ያሳዩ።\n${s.lastError ?? ''}'
+                                  : 'Sync is stuck: changes cannot be uploaded. Show this to the owner.\n${s.lastError ?? ''}',
+                              style: const TextStyle(fontSize: 11, color: AppColors.error, fontWeight: FontWeight.w600),
+                              maxLines: 5,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
                     trailing: ElevatedButton(
                       onPressed: s.syncing ? null : SyncService.instance.syncNow,
                       style: ElevatedButton.styleFrom(
@@ -244,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.backup_outlined, color: AppColors.secondaryBrown),
                     title: Text(isAmharic ? 'ሙሉ ምትኬ ፍጠር (ባለቤት)' : 'Create System Backup (Owner)'),
-                    subtitle: Text(isAmharic ? 'ሁሉንም ዳታ ወደ JSON ያስቀምጣል' : 'Saves full database to JSON archive'),
+                    subtitle: Text(isAmharic ? 'ሁሉንም ዳታ በፋይል አስቀምጥ ወይም ላክ' : 'Save or send a file with all shop data'),
                     onTap: _handleBackup,
                   ),
                 ],

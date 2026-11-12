@@ -94,9 +94,60 @@ class _InventoryScreenState extends State<InventoryScreen> with SyncRefreshMixin
                   _showAddEditProductDialog(product);
                 }
               : null,
+          onDelete: canEdit ? () => _confirmDeleteProduct(detailsCtx, product) : null,
         ),
       ),
     );
+  }
+
+  /// Owner/admin only. Removes the product and its sizes on this device and,
+  /// through sync, on every other device. Past sales, receipts and credit
+  /// records keep their own copy of the product name, so history is intact.
+  Future<void> _confirmDeleteProduct(BuildContext detailsCtx, ProductModel product) async {
+    final am = widget.isAmharic;
+    final units = product.totalStock;
+    final confirmed = await showDialog<bool>(
+      context: detailsCtx,
+      builder: (ctx) => AlertDialog(
+        title: Text(am ? 'ምርቱን ልሰርዝ?' : 'Delete product?'),
+        content: Text(
+          am
+              ? '"${product.productName}" ከሁሉም መሣሪያዎች ይሰረዛል።'
+                  '${units > 0 ? ' በክምችት ያሉ $units ዕቃዎችም ይሰረዛሉ።' : ''}'
+                  '\n\nያለፉ ሽያጮችና ደረሰኞች አይነኩም። ይህ ሊቀለበስ አይችልም።'
+              : '"${product.productName}" will be removed from all devices.'
+                  '${units > 0 ? ' Its $units ${units == 1 ? 'unit' : 'units'} in stock will be removed too.' : ''}'
+                  '\n\nPast sales and receipts are kept. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(am ? 'ተው' : 'Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(am ? 'ሰርዝ' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _sqliteService.deleteProduct(product.productId);
+      if (detailsCtx.mounted) Navigator.of(detailsCtx).pop();
+      await _loadProducts();
+      messenger.showSnackBar(SnackBar(
+        content: Text(am ? '"${product.productName}" ተሰርዟል' : '"${product.productName}" deleted'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        backgroundColor: AppColors.error,
+        content: Text(am ? 'መሰረዝ አልተሳካም: $e' : 'Could not delete: $e'),
+      ));
+    }
   }
 
   void _showAddEditProductDialog([ProductModel? productToEdit]) {

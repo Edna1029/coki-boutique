@@ -218,10 +218,12 @@ class SQLiteService {
       }
 
       // Process Variants for each size
-      final List<ProductVariantModel> finalVariants = [];
       for (final entry in sizeQuantities.entries) {
         final size = entry.key;
         final qtyToAdd = entry.value;
+        // Sizes left empty (0) are not stocked: don't create "S (0)" rows,
+        // and adding never lowers stock (that's what Edit is for).
+        if (qtyToAdd <= 0) continue;
 
         final existingVariant = await txn.query(
           DatabaseTables.tableProductVariants,
@@ -244,18 +246,8 @@ class SQLiteService {
             whereArgs: [variantId],
           );
 
-          finalVariants.add(ProductVariantModel(
-            variantId: variantId,
-            productId: targetProductId,
-            size: size,
-            quantity: newQty,
-            lastUpdated: now,
-          ));
-
           // Restock = a CHANGE (+n), so restocks on two devices both count.
-          if (qtyToAdd != 0) {
-            await _enqueueIncrement(txn, DatabaseTables.tableProductVariants, variantId, 'quantity', qtyToAdd, now);
-          }
+          await _enqueueIncrement(txn, DatabaseTables.tableProductVariants, variantId, 'quantity', qtyToAdd, now);
         } else {
           final variantId = _uuid.v4();
           final variantMap = {
@@ -266,8 +258,6 @@ class SQLiteService {
             'last_updated': now,
           };
           await txn.insert(DatabaseTables.tableProductVariants, variantMap);
-
-          finalVariants.add(ProductVariantModel.fromMap(variantMap));
 
           await _enqueueSync(
             txn,
@@ -284,8 +274,17 @@ class SQLiteService {
         where: 'product_id = ?',
         whereArgs: [targetProductId],
       );
+      // Return ALL sizes, not only the ones touched by this restock.
+      final allVariants = await txn.query(
+        DatabaseTables.tableProductVariants,
+        where: 'product_id = ?',
+        whereArgs: [targetProductId],
+      );
 
-      return ProductModel.fromMap(updatedProduct.first, variants: finalVariants);
+      return ProductModel.fromMap(
+        updatedProduct.first,
+        variants: allVariants.map((v) => ProductVariantModel.fromMap(v)).toList(),
+      );
     });
   }
 
@@ -370,13 +369,11 @@ class SQLiteService {
             where: 'variant_id = ?',
             whereArgs: [variantId],
           );
-          await _enqueueSync(
-            txn,
-            DatabaseTables.tableProductVariants,
-            variantId,
-            SyncOperation.update,
-            {'quantity': newQty, 'last_updated': now},
-          );
+          // Upload the correction as a CHANGE (new − old), like sales and
+          // restocks. Sending the absolute number would erase a sale another
+          // device made in the meantime.
+          await _enqueueIncrement(
+              txn, DatabaseTables.tableProductVariants, variantId, 'quantity', newQty - oldQty, now);
         } else if (newQty > 0) {
           final variantId = _uuid.v4();
           final variantMap = {

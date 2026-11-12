@@ -47,6 +47,53 @@ void main() {
       await addTestProduct(db, color: 'Red', barcode: '2000000000015');
       expect((await db.getAllProducts()).length, 2);
     });
+
+    test('sizes left at 0 are not saved (P4)', () async {
+      final p = await addTestProduct(db, sizes: {'S': 0, 'M': 3, 'L': 0, 'XL': 0});
+      expect(p.variants.map((v) => v.size), ['M']);
+      final stored = await db.getProductById(p.productId);
+      expect(stored!.variants.map((v) => v.size), ['M']);
+    });
+
+    test('restocking with 0 or negative never changes or lowers stock', () async {
+      await addTestProduct(db, sizes: {'M': 4});
+      final again = await addTestProduct(db, sizes: {'M': 0, 'S': -2});
+      expect(again.stockForSize('M'), 4);
+      expect(again.variants.any((v) => v.size == 'S'), isFalse);
+    });
+  });
+
+  group('deleting a product (P4)', () {
+    test('removes the product and its sizes but keeps past sales', () async {
+      final p = await addTestProduct(db, sizes: {'M': 5});
+      await sell(db, [line(p, 'M', 2)]);
+
+      await db.deleteProduct(p.productId);
+
+      expect(await db.getProductById(p.productId), isNull);
+      final raw = await DatabaseHelper.instance.database;
+      expect(
+        await raw.query(DatabaseTables.tableProductVariants,
+            where: 'product_id = ?', whereArgs: [p.productId]),
+        isEmpty,
+      );
+      // Sale history is untouched and still names the product.
+      expect((await db.getAllSales()).single.totalAmount, 200);
+      final items = await raw.query(DatabaseTables.tableSaleItems);
+      expect(items.single['product_name'], 'Test Shirt');
+    });
+
+    test('queues a cloud soft-delete for the product and every size', () async {
+      final p = await addTestProduct(db, sizes: {'S': 1, 'M': 2});
+      await db.deleteProduct(p.productId);
+
+      final raw = await DatabaseHelper.instance.database;
+      final deletes = await raw.query(DatabaseTables.tableSyncQueue,
+          where: 'operation = ?', whereArgs: [SyncOperation.delete.name]);
+      final byTable = deletes.map((r) => r['table_name']).toList();
+      expect(byTable.where((t) => t == DatabaseTables.tableProducts).length, 1);
+      expect(byTable.where((t) => t == DatabaseTables.tableProductVariants).length, 2);
+    });
   });
 
   group('editing a product (fix #3)', () {

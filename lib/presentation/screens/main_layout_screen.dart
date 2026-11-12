@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../data/services/firebase_auth_service.dart';
+import 'auth/login_screen.dart';
 import '../widgets/role_badge.dart';
 import '../../data/sync/sync_service.dart';
 import '../../core/constants/app_dimensions.dart';
@@ -33,16 +36,48 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
 
   // Two-way cloud sync runs while a user is signed in (this screen exists
   // only then). Logging out replaces this screen, which stops sync.
+  final _auth = FirebaseAuthService();
+  StreamSubscription<AccessChange>? _accessWatch;
+  bool _endingSession = false;
+
   @override
   void initState() {
     super.initState();
     SyncService.instance.start();
+    // If the owner removes this account or changes its role while the app is
+    // open, end the session as soon as the server says so (online only).
+    _accessWatch = _auth
+        .watchAccess(widget.currentUser.userId, widget.currentUser.role)
+        .listen(_onAccessChanged, onError: (Object e) => debugPrint('Access watch error (ignored): $e'));
   }
 
   @override
   void dispose() {
+    _accessWatch?.cancel();
     SyncService.instance.stop();
     super.dispose();
+  }
+
+  Future<void> _onAccessChanged(AccessChange change) async {
+    if (_endingSession || !mounted) return;
+    _endingSession = true;
+    if (change == AccessChange.removed) {
+      await _auth.signOutRemoved(widget.currentUser.userId);
+    } else {
+      await _auth.signOut(); // signing in again loads the new role
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(
+          onLanguageChanged: widget.onLanguageChanged,
+          onThemeChanged: widget.onThemeChanged,
+          initialFailure:
+              change == AccessChange.removed ? AuthFailure.accessRemoved : AuthFailure.roleChanged,
+        ),
+      ),
+      (_) => false,
+    );
   }
 
   static const int _reportsTab = 4;

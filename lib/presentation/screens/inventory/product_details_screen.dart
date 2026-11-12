@@ -16,12 +16,16 @@ class ProductDetailsScreen extends StatelessWidget {
   /// Opens the edit dialog. Null hides the Edit button (e.g. for employees).
   final VoidCallback? onEdit;
 
+  /// Asks to delete the product. Null hides the Delete button.
+  final VoidCallback? onDelete;
+
   const ProductDetailsScreen({
     super.key,
     required this.product,
     this.isAmharic = false,
     required this.onProductUpdated,
     this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -43,6 +47,12 @@ class ProductDetailsScreen extends StatelessWidget {
               tooltip: isAmharic ? 'ምርት አሻሽል' : 'Edit Product',
               icon: const Icon(Icons.edit_outlined, color: AppColors.primaryGreen),
               onPressed: onEdit,
+            ),
+          if (onDelete != null)
+            IconButton(
+              tooltip: isAmharic ? 'ምርት ሰርዝ' : 'Delete Product',
+              icon: const Icon(Icons.delete_outline, color: AppColors.error),
+              onPressed: onDelete,
             ),
         ],
       ),
@@ -146,6 +156,27 @@ class ProductDetailsScreen extends StatelessWidget {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
+
+                  // Two devices sold the last unit while offline: say so
+                  // instead of quietly showing a negative number.
+                  if (product.oversoldUnits > 0)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusInput),
+                        border: Border.all(color: AppColors.error),
+                      ),
+                      child: Text(
+                        isAmharic
+                            ? 'ከክምችት በላይ ${product.oversoldUnits} ተሽጧል። እባክዎ መደርደሪያውን ቆጥረው ክምችቱን ያስተካክሉ።'
+                            : '${product.oversoldUnits} more sold than were in stock. '
+                                'Please count the shelf and correct the stock.',
+                        style: const TextStyle(color: AppColors.error, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
 
                   Row(
                     children: allSizes.map((size) {
